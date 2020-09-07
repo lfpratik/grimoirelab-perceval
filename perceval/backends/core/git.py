@@ -43,7 +43,7 @@ from ...backend import (Backend,
                         BackendCommand,
                         BackendCommandArgumentParser)
 from ...errors import RepositoryError, ParseError
-from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME
+from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME, GitLOC
 
 CATEGORY_COMMIT = 'commit'
 
@@ -80,6 +80,7 @@ class Git(Backend):
         super().__init__(origin, tag=tag, archive=archive)
         self.uri = uri
         self.gitpath = gitpath
+        self.git_loc = GitLOC(self.uri)
 
     def fetch(self, category=CATEGORY_COMMIT, from_date=DEFAULT_DATETIME, to_date=DEFAULT_LAST_DATETIME,
               branches=None, latest_items=False, no_update=False):
@@ -321,10 +322,14 @@ class Git(Backend):
         return self.parse_git_log_from_iter(gitshow)
 
     def __create_git_repository(self):
+        if self.git_loc:
+            self.git_loc.load()
+
         if not os.path.exists(self.gitpath):
             repo = GitRepository.clone(self.uri, self.gitpath)
+            repo.git_loc = self.git_loc
         elif os.path.isdir(self.gitpath):
-            repo = GitRepository(self.uri, self.gitpath)
+            repo = GitRepository(self.uri, self.gitpath, self.git_loc)
         return repo
 
 
@@ -519,6 +524,7 @@ class GitParser:
         # Aux vars to store the commit that is being parsed
         self.commit = None
         self.commit_files = {}
+        self.total_lines_of_code = self.__get_total_loc()
 
         self.handlers = {
             self.INIT: self._handle_init,
@@ -558,6 +564,8 @@ class GitParser:
         commit = remove_none_values(commit)
         commit['files'] = [remove_none_values(item)
                            for _, item in sorted(self.commit_files.items())]
+
+        commit['total_lines_of_code'] = self.total_lines_of_code
 
         self.commit = None
         self.commit_files = {}
@@ -732,6 +740,10 @@ class GitParser:
         else:
             return f
 
+    def __get_total_loc(self):
+        repo = self.stream.gi_frame.f_locals['self']
+        return repo.git_loc.fetch_loc()
+
 
 class EmptyRepositoryError(RepositoryError):
     """Exception raised when a repository is empty"""
@@ -785,7 +797,7 @@ class GitRepository:
         '-c',  # show merge info
     ]
 
-    def __init__(self, uri, dirpath):
+    def __init__(self, uri, dirpath, git_loc=None):
         gitdir = os.path.join(dirpath, 'HEAD')
 
         if not os.path.exists(dirpath):
@@ -808,6 +820,7 @@ class GitRepository:
             'NO_PROXY': os.getenv('NO_PROXY', ''),
             'HOME': os.getenv('HOME', '')
         }
+        self.git_loc = git_loc
 
     @classmethod
     def clone(cls, uri, dirpath):
