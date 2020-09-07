@@ -30,6 +30,8 @@ import logging
 import mailbox
 import re
 import sys
+import os
+import subprocess
 
 import xml.etree.ElementTree
 
@@ -38,7 +40,7 @@ import dateutil.tz
 
 import requests
 
-from .errors import ParseError
+from .errors import ParseError, RepositoryError
 
 
 logger = logging.getLogger(__name__)
@@ -271,3 +273,191 @@ def xml_to_dict(raw_xml):
     d = node_to_dict(tree)
 
     return d
+
+
+class LinesCount:
+
+    def __init__(self, git_url=None):
+        self.base_path = '~/.perceval/repositories'
+        self.git_url = git_url
+
+    def __del__(self):
+        pass
+
+    @property
+    def repo_path(self):
+        if self.git_url:
+            return self.__get_git_repo_path()
+
+    @staticmethod
+    def __get_processed_uri(uri):
+        return uri.lstrip('/')
+
+    def __get_base_path(self):
+        return os.path.expanduser(self.base_path)
+
+    def __get_git_repo_path(self):
+        base_path = self.__get_base_path()
+        processed_uri = self.__get_processed_uri(self.git_url)
+        repo_dir = processed_uri.split('/')[-1].replace('.git', '')
+        return os.path.join(base_path, repo_dir)
+
+    @staticmethod
+    def _exec(cmd, cwd=None, env=None, ignored_error_codes=None,
+              encoding='utf-8'):
+        """Run a command.
+
+        Execute `cmd` command in the directory set by `cwd`. Environment
+        variables can be set using the `env` dictionary. The output
+        data is returned as encoded bytes.
+
+        Commands which their returning status codes are non-zero will
+        be treated as failed. Error codes considered as valid can be
+        ignored giving them in the `ignored_error_codes` list.
+
+        :returns: the output of the command as encoded bytes
+
+        :raises RepositoryError: when an error occurs running the command
+        """
+        if ignored_error_codes is None:
+            ignored_error_codes = []
+
+        logger.debug("Running command %s (cwd: %s, env: %s)",
+                     ' '.join(cmd), cwd, str(env))
+
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    cwd=cwd, env=env)
+            (outs, errs) = proc.communicate()
+        except OSError as e:
+            raise RepositoryError(cause=str(e))
+
+        if proc.returncode != 0 and proc.returncode not in ignored_error_codes:
+            err = errs.decode(encoding, errors='surrogateescape')
+            cause = "git command - %s" % err
+            raise RepositoryError(cause=cause)
+        else:
+            logger.debug(errs.decode(encoding, errors='surrogateescape'))
+
+        return outs
+
+    def _loc(self, path):
+        """
+        Get the total lines of code from the default branch
+        """
+        total_loc = 0
+
+        def extract_lines_of_code(value):
+            status = value.decode('utf8')
+            if len(status) > 0:
+                return int((status.split('\n')[-3]).split(' ')[-1])
+            return 0
+
+        if path and os.path.exists(path):
+            cmd = ['cloc', path]
+            env = {
+                'LANG': 'C',
+                'HOME': os.getenv('HOME', '')
+            }
+            result = self._exec(cmd, env=env)
+            total_loc = extract_lines_of_code(result)
+
+        return total_loc
+
+    def _clone(self):
+        pass
+
+    def _pull(self):
+        pass
+
+    def _clean(self):
+        pass
+
+    def _fetch(self):
+        pass
+
+    def load(self):
+        pass
+
+
+class GitLOC(LinesCount):
+
+    def __init__(self, url):
+        super().__init__()
+        self.git_url = url
+
+    def _clone(self):
+        """Clone a Git repository.
+
+        Make a bare copy of the repository stored in `uri` into `dirpath`.
+        The repository would be either local or remote.
+
+        :param uri: URI of the repository
+        :param dirtpath: directory where the repository will be cloned
+
+        :returns: a `GitRepository` class having cloned the repository
+
+        :raises RepositoryError: when an error occurs cloning the given
+            repository
+        """
+        cmd = ['git', 'clone', self.git_url, self.repo_path]
+        env = {
+            'LANG': 'C',
+            'HOME': os.getenv('HOME', '')
+        }
+
+        self._exec(cmd, env=env)
+
+        logger.debug("Git %s repository cloned into %s",
+                     self.git_url, self.repo_path)
+
+    def _clean(self):
+        cmd = ['rm', '-rf', self.repo_path]
+        env = {
+            'LANG': 'C',
+            'HOME': os.getenv('HOME', '')
+        }
+
+        self._exec(cmd, env=env)
+
+        logger.debug("Git %s repository clean", self.repo_path)
+
+    def _pull(self):
+        os.chdir(os.path.abspath(self.repo_path))
+        cmd = ['git', 'pull']
+        env = {
+            'LANG': 'C',
+            'HOME': os.getenv('HOME', '')
+        }
+
+        self._exec(cmd, env=env)
+
+        logger.debug("Git %s repository pull updated code", self.repo_path)
+
+    def _fetch(self):
+        os.chdir(os.path.abspath(self.repo_path))
+
+        cmd_fetch = ['git', 'fetch']
+        cmd_fetch_p = ['git', 'fetch']
+
+        env = {
+            'LANG': 'C',
+            'HOME': os.getenv('HOME', '')
+        }
+
+        self._exec(cmd_fetch, env=env)
+        logger.debug("Git %s fetch updated code", self.repo_path)
+
+        self._exec(cmd_fetch_p, env=env)
+        logger.debug("Git %s fetch purge code", self.repo_path)
+
+    def load(self):
+        if self.repo_path and not os.path.exists(self.repo_path):
+            self._clone()
+        else:
+            self._fetch()
+            self._pull()
+
+    def fetch_loc(self):
+        return self._loc(self.repo_path)
