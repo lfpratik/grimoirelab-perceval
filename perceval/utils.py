@@ -424,13 +424,29 @@ class GitLOC(LinesCount):
         logger.debug("Git %s repository clean", self.repo_path)
 
     def _pull(self):
+
+        def get_active_branch(value):
+            default = 'master'
+            status = value.decode('utf8')
+            branch_lst = status.split('\n')
+            if len(branch_lst) > 0:
+                b = next((branch for branch in branch_lst
+                          if branch.startswith('*')), default)
+                b = b.replace('* ', '')
+                return b
+            return default
+
         os.chdir(os.path.abspath(self.repo_path))
-        cmd = ['git', 'pull', 'origin', 'master']
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
         }
 
+        cmd = ['git', 'branch', '-a']
+        result = self._exec(cmd, env=env)
+        branch = get_active_branch(result)
+
+        cmd = ['git', 'pull', 'origin', branch]
         self._exec(cmd, env=env)
 
         logger.debug("Git %s repository pull updated code", self.repo_path)
