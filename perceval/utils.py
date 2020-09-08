@@ -425,7 +425,7 @@ class GitLOC(LinesCount):
 
     def _pull(self):
         os.chdir(os.path.abspath(self.repo_path))
-        cmd = ['git', 'pull']
+        cmd = ['git', 'pull', 'origin', 'master']
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
