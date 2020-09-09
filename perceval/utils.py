@@ -407,10 +407,12 @@ class GitLOC(LinesCount):
             'HOME': os.getenv('HOME', '')
         }
 
-        self._exec(cmd, env=env)
-
-        logger.debug("Git %s repository cloned into %s",
-                     self.git_url, self.repo_path)
+        try:
+            self._exec(cmd, env=env)
+            logger.debug("Git %s repository cloned into %s",
+                         self.git_url, self.repo_path)
+        except (RuntimeError, Exception) as cloe:
+            logger.error("Git clone error %s ", str(cloe))
 
     def _clean(self):
         cmd = ['rm', '-rf', self.repo_path]
@@ -419,9 +421,11 @@ class GitLOC(LinesCount):
             'HOME': os.getenv('HOME', '')
         }
 
-        self._exec(cmd, env=env)
-
-        logger.debug("Git %s repository clean", self.repo_path)
+        try:
+            self._exec(cmd, env=env)
+            logger.debug("Git %s repository clean", self.repo_path)
+        except (RuntimeError, Exception) as cle:
+            logger.error("Git clone error %s", str(cle))
 
     def _pull(self):
 
@@ -441,21 +445,29 @@ class GitLOC(LinesCount):
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
         }
+        branch = None
 
-        cmd = ['git', 'branch', '-a']
-        result = self._exec(cmd, env=env)
-        branch = get_active_branch(result)
-        logger.debug("Git %s repository active branch is: %s",
-                     self.repo_path, branch)
-        if branch:
-            cmd = ['git', 'pull', 'origin', branch]
-            self._exec(cmd, env=env)
-            logger.debug("Git %s repository pull updated code", self.repo_path)
-        else:
-            logger.debug("Git %s repository active branch missing",
-                         self.repo_path)
-            logger.debug("Git %s repository pull request skip ",
-                         self.repo_path)
+        try:
+            cmd = ['git', 'branch', '-a']
+            result = self._exec(cmd, env=env)
+            branch = get_active_branch(result)
+            logger.debug("Git %s repository active branch is: %s",
+                         self.repo_path, branch)
+        except (RuntimeError, Exception) as be:
+            logger.error("Git find active branch error %s", str(be))
+
+        try:
+            if branch:
+                cmd = ['git', 'pull', 'origin', branch]
+                self._exec(cmd, env=env)
+                logger.debug("Git %s repository pull updated code",
+                             self.repo_path)
+            else:
+                logger.debug("Git repository active branch missing")
+                logger.debug("Git %s repository pull request skip ",
+                             self.repo_path)
+        except (RuntimeError, Exception) as pe:
+            logger.error("Git pull error %s", str(pe))
 
     def _fetch(self):
         os.chdir(os.path.abspath(self.repo_path))
@@ -468,11 +480,17 @@ class GitLOC(LinesCount):
             'HOME': os.getenv('HOME', '')
         }
 
-        self._exec(cmd_fetch, env=env)
-        logger.debug("Git %s fetch updated code", self.repo_path)
+        try:
+            self._exec(cmd_fetch, env=env)
+            logger.debug("Git %s fetch updated code", self.repo_path)
+        except (RuntimeError, Exception) as fe:
+            logger.error("Git fetch purge error %s", str(fe))
 
-        self._exec(cmd_fetch_p, env=env)
-        logger.debug("Git %s fetch purge code", self.repo_path)
+        try:
+            self._exec(cmd_fetch_p, env=env)
+            logger.debug("Git %s fetch purge code", self.repo_path)
+        except (RuntimeError, Exception) as fpe:
+            logger.error("Git fetch purge error %s", str(fpe))
 
     def load(self):
         if self.repo_path and not os.path.exists(self.repo_path):
