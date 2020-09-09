@@ -426,15 +426,15 @@ class GitLOC(LinesCount):
     def _pull(self):
 
         def get_active_branch(value):
-            default = 'master'
             status = value.decode('utf8')
             branch_lst = status.split('\n')
             if len(branch_lst) > 0:
                 b = next((branch for branch in branch_lst
-                          if branch.startswith('*')), default)
-                b = b.replace('* ', '')
+                          if branch.startswith('*')), None)
+                if b:
+                    return b.replace('* ', '')
                 return b
-            return default
+            return None
 
         os.chdir(os.path.abspath(self.repo_path))
         env = {
@@ -445,11 +445,17 @@ class GitLOC(LinesCount):
         cmd = ['git', 'branch', '-a']
         result = self._exec(cmd, env=env)
         branch = get_active_branch(result)
-
-        cmd = ['git', 'pull', 'origin', branch]
-        self._exec(cmd, env=env)
-
-        logger.debug("Git %s repository pull updated code", self.repo_path)
+        logger.debug("Git %s repository active branch is: %s",
+                     self.repo_path, branch)
+        if branch:
+            cmd = ['git', 'pull', 'origin', branch]
+            self._exec(cmd, env=env)
+            logger.debug("Git %s repository pull updated code", self.repo_path)
+        else:
+            logger.debug("Git %s repository active branch missing",
+                         self.repo_path)
+            logger.debug("Git %s repository pull request skip ",
+                         self.repo_path)
 
     def _fetch(self):
         os.chdir(os.path.abspath(self.repo_path))
