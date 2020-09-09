@@ -350,7 +350,7 @@ class LinesCount:
 
         def extract_lines_of_code(value):
             status = value.decode('utf8')
-            if len(status) > 0:
+            if len(status) > 0 and 'SUM:' in status:
                 return int((status.split('\n')[-3]).split(' ')[-1])
             return 0
 
