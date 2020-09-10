@@ -524,7 +524,9 @@ class GitParser:
         # Aux vars to store the commit that is being parsed
         self.commit = None
         self.commit_files = {}
-        self.total_lines_of_code = self.__get_total_loc()
+        loc, pls = self.__get_stats()
+        self.total_lines_of_code = loc
+        self.program_language_summary = pls
 
         self.handlers = {
             self.INIT: self._handle_init,
@@ -566,6 +568,9 @@ class GitParser:
                            for _, item in sorted(self.commit_files.items())]
 
         commit['total_lines_of_code'] = self.total_lines_of_code
+        commit['program_language_summary'] = self.program_language_summary
+
+        print(commit['program_language_summary'])
 
         self.commit = None
         self.commit_files = {}
@@ -740,9 +745,9 @@ class GitParser:
         else:
             return f
 
-    def __get_total_loc(self):
+    def __get_stats(self):
         repo = self.stream.gi_frame.f_locals['self']
-        return repo.git_loc.fetch_loc()
+        return repo.git_loc.get_stats()
 
 
 class EmptyRepositoryError(RepositoryError):
