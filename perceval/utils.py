@@ -275,19 +275,18 @@ def xml_to_dict(raw_xml):
     return d
 
 
-class LinesCount:
+class GitLOC:
 
-    def __init__(self, git_url=None):
+    def __init__(self, url):
         self.base_path = '~/.perceval/repositories'
-        self.git_url = git_url
+        self.git_url = url
 
     def __del__(self):
         pass
 
     @property
     def repo_path(self):
-        if self.git_url:
-            return self.__get_git_repo_path()
+        return self.__get_git_repo_path()
 
     @staticmethod
     def __get_processed_uri(uri):
@@ -342,50 +341,56 @@ class LinesCount:
 
         return outs
 
-    def _loc(self, path):
-        """
-        Get the total lines of code from the default branch
-        """
-        total_loc = 0
-
-        def extract_lines_of_code(value):
-            status = value.decode('utf8')
-            if len(status) > 0 and 'SUM:' in status:
-                return int((status.split('\n')[-3]).split(' ')[-1])
-            return 0
-
+    def _stats(self, path):
         if path and os.path.exists(path):
             cmd = ['cloc', path]
             env = {
                 'LANG': 'C',
                 'HOME': os.getenv('HOME', '')
             }
-            result = self._exec(cmd, env=env)
-            total_loc = extract_lines_of_code(result)
+            return self._exec(cmd, env=env)
 
-        return total_loc
+        return ''.encode('utf-8')
 
-    def _clone(self):
-        pass
+    def _pls(self, result):
+        """
+            Get the programing language summary
+        """
+        def extract_program_language_summary(value):
+            stats = list()
+            status = value.decode('utf8')
+            lan_smry_lst = status.split('\n')
+            if len(lan_smry_lst) > 0:
+                for smry in lan_smry_lst[::-1]:
+                    if smry.startswith('---') or len(smry) == 0:
+                        continue
+                    elif smry.startswith('Language'):
+                        break
+                    else:
+                        smry_result = smry.split()
+                        stats.append({
+                            'language': smry_result[0].replace('SUM:', 'Total'),
+                            'files': smry_result[1],
+                            'blank': smry_result[2],
+                            'comment': smry_result[3],
+                            'code': smry_result[4]
+                        })
 
-    def _pull(self):
-        pass
+            return stats
 
-    def _clean(self):
-        pass
+        return extract_program_language_summary(result)
 
-    def _fetch(self):
-        pass
+    def _loc(self, result):
+        """
+        Get the total lines of code from the default branch
+        """
+        def extract_lines_of_code(value):
+            status = value.decode('utf8')
+            if len(status) > 0 and 'SUM:' in status:
+                return int((status.split('\n')[-3]).split(' ')[-1])
+            return 0
 
-    def load(self):
-        pass
-
-
-class GitLOC(LinesCount):
-
-    def __init__(self, url):
-        super().__init__()
-        self.git_url = url
+        return extract_lines_of_code(result)
 
     def _clone(self):
         """Clone a Git repository.
@@ -499,5 +504,8 @@ class GitLOC(LinesCount):
             self._fetch()
             self._pull()
 
-    def fetch_loc(self):
-        return self._loc(self.repo_path)
+    def get_stats(self):
+        result = self._stats(self.repo_path)
+        loc = self._loc(result)
+        pls = self._pls(result)
+        return loc, pls
