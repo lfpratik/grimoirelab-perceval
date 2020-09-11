@@ -439,9 +439,9 @@ class GitLOC:
             branch_lst = status.split('\n')
             if len(branch_lst) > 0:
                 b = next((branch for branch in branch_lst
-                          if branch.startswith('*')), None)
+                          if branch.strip().startswith('remotes/origin/HEAD ->')), None)
                 if b:
-                    return b.replace('* ', '')
+                    return b.replace('remotes/origin/HEAD -> origin/', '').strip()
                 return b
             return None
 
@@ -460,6 +460,16 @@ class GitLOC:
                          self.repo_path, branch)
         except (RuntimeError, Exception) as be:
             logger.error("Git find active branch error %s", str(be))
+
+        try:
+            if branch:
+                cmd = ['git', 'checkout', branch]
+                self._exec(cmd, env=env)
+                logger.debug("Git %s repository "
+                             "checkout with following branch %s",
+                             self.repo_path, branch)
+        except (RuntimeError, Exception) as gce:
+            logger.error("Git checkout error %s", str(gce))
 
         try:
             if branch:
