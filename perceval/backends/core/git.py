@@ -570,8 +570,6 @@ class GitParser:
         commit['total_lines_of_code'] = self.total_lines_of_code
         commit['program_language_summary'] = self.program_language_summary
 
-        print(commit['program_language_summary'])
-
         self.commit = None
         self.commit_files = {}
 
