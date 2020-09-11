@@ -433,18 +433,6 @@ class GitLOC:
             logger.error("Git clone error %s", str(cle))
 
     def _pull(self):
-
-        def get_active_branch(value):
-            status = value.decode('utf8')
-            branch_lst = status.split('\n')
-            if len(branch_lst) > 0:
-                b = next((branch for branch in branch_lst
-                          if branch.strip().startswith('remotes/origin/HEAD ->')), None)
-                if b:
-                    return b.replace('remotes/origin/HEAD -> origin/', '').strip()
-                return b
-            return None
-
         os.chdir(os.path.abspath(self.repo_path))
         env = {
             'LANG': 'C',
@@ -453,9 +441,12 @@ class GitLOC:
         branch = None
 
         try:
-            cmd = ['git', 'branch', '-a']
-            result = self._exec(cmd, env=env)
-            branch = get_active_branch(result)
+            cmd_auto = ['git', 'remote', 'set-head', 'origin', '--auto']
+            cmd_short = ['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']
+            self._exec(cmd_auto, env=env)
+            result = self._exec(cmd_short, env=env)
+            result = result.decode('utf8')
+            branch = result.replace('origin/', '').strip()
             logger.debug("Git %s repository active branch is: %s",
                          self.repo_path, branch)
         except (RuntimeError, Exception) as be:
