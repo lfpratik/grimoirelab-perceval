@@ -279,7 +279,7 @@ class GitLOC:
 
     def __init__(self, url):
         self.base_path = '~/.perceval/repositories'
-        self.git_url = url
+        self.git_url = self.__get_processed_uri(url)
 
     def __del__(self):
         pass
@@ -288,18 +288,24 @@ class GitLOC:
     def repo_path(self):
         return self.__get_git_repo_path()
 
+    @property
+    def org_name(self):
+        return self.git_url.split('.')[-2]
+
+    def repo_name(self):
+        return self.git_url.split('.')[-1]
+
     @staticmethod
     def __get_processed_uri(uri):
-        return uri.lstrip('/')
+        return uri.lstrip('/').replace('.git', '')
 
     def __get_base_path(self):
         return os.path.expanduser(self.base_path)
 
     def __get_git_repo_path(self):
         base_path = self.__get_base_path()
-        processed_uri = self.__get_processed_uri(self.git_url)
-        repo_dir = processed_uri.split('/')[-1].replace('.git', '')
-        return os.path.join(base_path, repo_dir)
+        repo_dir_name = os.path.join(self.org_name, self.repo_name())
+        return os.path.join(base_path, repo_dir_name)
 
     @staticmethod
     def sanitize_os_output(result):
