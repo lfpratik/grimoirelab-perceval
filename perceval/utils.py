@@ -302,6 +302,15 @@ class GitLOC:
         return os.path.join(base_path, repo_dir)
 
     @staticmethod
+    def sanitize_os_output(result):
+        """
+        Sanitize the os command output and return the readable output
+        """
+        sanitized_output = result.decode('UTF-8')
+
+        return sanitized_output
+
+    @staticmethod
     def _exec(cmd, cwd=None, env=None, ignored_error_codes=None,
               encoding='utf-8'):
         """Run a command.
@@ -358,8 +367,7 @@ class GitLOC:
         """
         def extract_program_language_summary(value):
             stats = list()
-            status = value.decode('utf8')
-            lan_smry_lst = status.split('\n')
+            lan_smry_lst = value.split('\n')
             if len(lan_smry_lst) > 0:
                 for smry in lan_smry_lst[::-1]:
                     if smry.startswith('---') or len(smry) == 0:
@@ -378,19 +386,18 @@ class GitLOC:
 
             return stats
 
-        return extract_program_language_summary(result)
+        return extract_program_language_summary(self.sanitize_os_output(result))
 
     def _loc(self, result):
         """
         Get the total lines of code from the default branch
         """
         def extract_lines_of_code(value):
-            status = value.decode('utf8')
-            if len(status) > 0 and 'SUM:' in status:
-                return int((status.split('\n')[-3]).split(' ')[-1])
+            if len(value) > 0 and 'SUM:' in value:
+                return int((value.split('\n')[-3]).split(' ')[-1])
             return 0
 
-        return extract_lines_of_code(result)
+        return extract_lines_of_code(self.sanitize_os_output(result))
 
     def _clone(self):
         """Clone a Git repository.
@@ -445,7 +452,7 @@ class GitLOC:
             cmd_short = ['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']
             self._exec(cmd_auto, env=env)
             result = self._exec(cmd_short, env=env)
-            result = result.decode('utf8')
+            result = self.sanitize_os_output(result)
             branch = result.replace('origin/', '').strip()
             logger.debug("Git %s repository active branch is: %s",
                          self.repo_path, branch)
