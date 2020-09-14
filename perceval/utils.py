@@ -285,9 +285,7 @@ class GitLOC:
         self._cache = {}
 
     def __del__(self):
-        self._write_json_file(data=self._cache,
-                              path=self.__get_cache_path(),
-                              filename=self.cache_file_name)
+        logger.debug('GitLOC object clean up')
 
     @property
     def cache_path(self):
