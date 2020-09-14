@@ -604,8 +604,6 @@ class GitLOC:
             self.uptodate = self._pull()
 
     def get_stats(self):
-        import datetime     # noqa
-
         loc = self._get_cache_item(self.repo_name, 'loc')
         pls = self._get_cache_item(self.repo_name, 'pls')
 
