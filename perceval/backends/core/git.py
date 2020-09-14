@@ -322,15 +322,18 @@ class Git(Backend):
         return self.parse_git_log_from_iter(gitshow)
 
     def __create_git_repository(self):
-        if self.git_loc:
-            self.git_loc._load_cache()
-            self.git_loc.load()
+        git_loc = getattr(self, 'git_loc', None)
+        if git_loc:
+            git_loc._load_cache()
+            git_loc.load()
 
         if not os.path.exists(self.gitpath):
             repo = GitRepository.clone(self.uri, self.gitpath)
-            repo.git_loc = self.git_loc
         elif os.path.isdir(self.gitpath):
-            repo = GitRepository(self.uri, self.gitpath, self.git_loc)
+            repo = GitRepository(self.uri, self.gitpath)
+
+        setattr(repo, 'git_loc', git_loc)
+
         return repo
 
 
@@ -745,8 +748,10 @@ class GitParser:
             return f
 
     def __get_stats(self):
-        repo = self.stream.gi_frame.f_locals['self']
-        return repo.git_loc.get_stats()
+        repo = self.stream.gi_frame.f_locals.get('self')
+        if repo:
+            return repo.git_loc.get_stats()
+        return 0, []
 
 
 class EmptyRepositoryError(RepositoryError):
@@ -801,7 +806,7 @@ class GitRepository:
         '-c',  # show merge info
     ]
 
-    def __init__(self, uri, dirpath, git_loc=None):
+    def __init__(self, uri, dirpath):
         gitdir = os.path.join(dirpath, 'HEAD')
 
         if not os.path.exists(dirpath):
@@ -824,7 +829,6 @@ class GitRepository:
             'NO_PROXY': os.getenv('NO_PROXY', ''),
             'HOME': os.getenv('HOME', '')
         }
-        self.git_loc = git_loc
 
     @classmethod
     def clone(cls, uri, dirpath):
