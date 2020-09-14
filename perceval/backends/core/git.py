@@ -323,6 +323,7 @@ class Git(Backend):
 
     def __create_git_repository(self):
         if self.git_loc:
+            self.git_loc._load_cache()
             self.git_loc.load()
 
         if not os.path.exists(self.gitpath):
