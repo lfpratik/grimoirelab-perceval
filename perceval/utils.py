@@ -285,7 +285,7 @@ class GitLOC:
         self._cache = {}
 
     def __del__(self):
-        logger.debug('GitLOC object clean up')
+        pass
 
     @property
     def cache_path(self):
