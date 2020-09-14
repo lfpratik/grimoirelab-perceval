@@ -26,6 +26,7 @@
 
 import datetime
 import email
+import json
 import logging
 import mailbox
 import re
@@ -280,9 +281,24 @@ class GitLOC:
     def __init__(self, url):
         self.base_path = '~/.perceval/repositories'
         self.git_url = self.__get_processed_uri(url)
+        self.uptodate = False
+        self._cache = {}
 
     def __del__(self):
-        pass
+        self._write_json_file(data=self._cache,
+                              path=self.__get_cache_path(),
+                              filename=self.cache_file_name)
+
+    @property
+    def cache_path(self):
+        path = os.path.expanduser('~/.perceval/cache')
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return '~/.perceval/cache'
+
+    @property
+    def cache_file_name(self):
+        return 'stats.json'
 
     @property
     def repo_path(self):
@@ -290,10 +306,11 @@ class GitLOC:
 
     @property
     def org_name(self):
-        return self.git_url.split('.')[-2]
+        return self.git_url.split('/')[-2]
 
+    @property
     def repo_name(self):
-        return self.git_url.split('.')[-1]
+        return self.git_url.split('/')[-1]
 
     @staticmethod
     def __get_processed_uri(uri):
@@ -302,9 +319,16 @@ class GitLOC:
     def __get_base_path(self):
         return os.path.expanduser(self.base_path)
 
+    def __get_cache_path(self):
+        base_path = os.path.expanduser(self.cache_path)
+        path = os.path.join(base_path, self.org_name)
+        if not os.path.exists(path):
+            os.makedirs(path)
+        return path
+
     def __get_git_repo_path(self):
         base_path = self.__get_base_path()
-        repo_dir_name = os.path.join(self.org_name, self.repo_name())
+        repo_dir_name = os.path.join(self.org_name, self.repo_name)
         return os.path.join(base_path, repo_dir_name)
 
     @staticmethod
@@ -452,6 +476,7 @@ class GitLOC:
             'HOME': os.getenv('HOME', '')
         }
         branch = None
+        status = False
 
         try:
             cmd_auto = ['git', 'remote', 'set-head', 'origin', '--auto']
@@ -478,7 +503,10 @@ class GitLOC:
         try:
             if branch:
                 cmd = ['git', 'pull', 'origin', branch]
-                self._exec(cmd, env=env)
+                result = self._exec(cmd, env=env)
+                result = self.sanitize_os_output(result)
+                if len(result) >= 18:
+                    status = True
                 logger.debug("Git %s repository pull updated code",
                              self.repo_path)
             else:
@@ -487,6 +515,8 @@ class GitLOC:
                              self.repo_path)
         except (RuntimeError, Exception) as pe:
             logger.error("Git pull error %s", str(pe))
+
+        return status
 
     def _fetch(self):
         os.chdir(os.path.abspath(self.repo_path))
@@ -511,15 +541,92 @@ class GitLOC:
         except (RuntimeError, Exception) as fpe:
             logger.error("Git fetch purge error %s", str(fpe))
 
+    def _build_empty_stats_data(self):
+        stats_data = {
+            self.repo_name: {
+                'loc': 0,
+                'pls': [],
+                'timestamp': None
+            }
+        }
+        return stats_data
+
+    def _write_json_file(self, data, path, filename):
+        path = os.path.join(path, filename)
+        with open(path, 'w') as f:
+            f.write(json.dumps(data, indent=4))
+        f.close()
+
+    def _read_json_file(self, path, filename):
+        path = os.path.join(path, filename)
+        with open(path, 'r') as f:
+            data = f.read()
+        f.close()
+        return json.loads(data)
+
+    def _load_cache(self):
+        path = os.path.join(self.__get_cache_path(), self.cache_file_name)
+
+        if not os.path.exists(path):
+            stats_data = self._build_empty_stats_data()
+            self._cache = stats_data
+            self._write_json_file(data=stats_data,
+                                  path=self.__get_cache_path(),
+                                  filename=self.cache_file_name)
+        else:
+            self._cache = self._read_json_file(path=self.__get_cache_path(),
+                                               filename=self.cache_file_name)
+
+            if self.repo_name not in self._cache:
+                self._cache.update(self._build_empty_stats_data())
+                self._write_json_file(data=self._cache,
+                                      path=self.__get_cache_path(),
+                                      filename=self.cache_file_name)
+
+    def _get_cache_item(self, project_name, key):
+        return self._cache[project_name][key]
+
+    def _update_cache_item(self, project_name, key, value):
+        data = self._cache.get(project_name)
+        data[key] = value
+        self._cache.update({project_name: data})
+
+    def _delete_cache_item(self, project_name, key=None):
+        if key:
+            del self._cache[project_name][key]
+        del self._cache[project_name]
+
     def load(self):
         if self.repo_path and not os.path.exists(self.repo_path):
             self._clone()
         else:
             self._fetch()
-            self._pull()
+            self.uptodate = self._pull()
 
     def get_stats(self):
-        result = self._stats(self.repo_path)
-        loc = self._loc(result)
-        pls = self._pls(result)
+        import datetime     # noqa
+
+        loc = self._get_cache_item(self.repo_name, 'loc')
+        pls = self._get_cache_item(self.repo_name, 'pls')
+
+        if not self.uptodate or (loc == 0 and len(pls) == 0):
+            result = self._stats(self.repo_path)
+            loc = self._loc(result)
+            pls = self._pls(result)
+            self._update_cache_item(project_name=self.repo_name,
+                                    key='loc',
+                                    value=loc)
+            self._update_cache_item(project_name=self.repo_name,
+                                    key='pls',
+                                    value=pls)
+            utc_date = datetime.datetime.utcnow()
+            if utc_date.tzinfo is None:
+                utc_date = utc_date.replace(tzinfo=datetime.timezone.utc)
+            self._update_cache_item(project_name=self.repo_name,
+                                    key='timestamp',
+                                    value=utc_date.isoformat())
+            self._write_json_file(data=self._cache,
+                                  path=self.__get_cache_path(),
+                                  filename=self.cache_file_name)
+
         return loc, pls
