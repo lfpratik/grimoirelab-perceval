@@ -398,7 +398,7 @@ class GitLOC:
         def extract_program_language_summary(value):
             stats = list()
             lan_smry_lst = value.split('\n')
-            if len(lan_smry_lst) > 0:
+            if 'SUM:' in value and len(lan_smry_lst) > 0:
                 for smry in lan_smry_lst[::-1]:
                     if smry.startswith('---') or len(smry) == 0:
                         continue
