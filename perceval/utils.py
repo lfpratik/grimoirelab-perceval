@@ -319,16 +319,17 @@ class GitLOC:
 
     def _build_repo_name(self, path, org_name):
         sanitize_path = self.sanitize_url(path)
-        sanitize_path = sanitize_path.replace(org_name + '/', '')
+        if org_name in sanitize_path:
+            sanitize_path = sanitize_path.replace('{0}/'.format(self.org_name), '')
         if not self.follow_hierarchy:
-            return sanitize_path.replace('/', '_')
+            return sanitize_path.replace('/', '-').replace('_', '-')
         return sanitize_path
 
     def _build_org_name(self, path):
         sanitize_path = self.sanitize_url(path)
         if '.' in sanitize_path:
             return sanitize_path.split('.')[1]
-        return sanitize_path.split('/')[1]
+        return sanitize_path.split('/')[0]
 
     @staticmethod
     def __get_processed_uri(uri):
@@ -347,8 +348,8 @@ class GitLOC:
     def __get_git_repo_path(self):
         base_path = self.__get_base_path()
         if self.follow_hierarchy:
-            return os.path.join(base_path, self.org_name + self.repo_name)
-        return os.path.join(base_path, self.org_name + self.repo_name)
+            return os.path.join(base_path, '{0}/{1}'.format(self.org_name, self.repo_name))
+        return os.path.join(base_path, '{0}-{1}'.format(self.org_name, self.repo_name))
 
     @staticmethod
     def is_gitsource(host):
@@ -361,9 +362,10 @@ class GitLOC:
     @staticmethod
     def sanitize_url(path):
         if path.startswith('/r/'):
-            path = path.replace('/r', '')
+            path = path.replace('/r/', '')
         elif path.startswith('/gerrit/'):
-            path = path.replace('/gerrit', '')
+            path = path.replace('/gerrit/', '')
+        path = path.lstrip('/')
         return path
 
     @staticmethod
@@ -587,17 +589,30 @@ class GitLOC:
         return stats_data
 
     def _write_json_file(self, data, path, filename):
-        path = os.path.join(path, filename)
-        with open(path, 'w') as f:
-            f.write(json.dumps(data, indent=4))
-        f.close()
+        try:
+            path = os.path.join(path, filename)
+            with open(path, 'w') as f:
+                f.write(json.dumps(data, indent=4))
+            f.close()
+        except Exception as je:
+            logger.error("cache file write error %s", str(je))
+        finally:
+            pass
 
     def _read_json_file(self, path, filename):
-        path = os.path.join(path, filename)
-        with open(path, 'r') as f:
-            data = f.read()
-        f.close()
-        return json.loads(data)
+        error = None
+        try:
+            path = os.path.join(path, filename)
+            with open(path, 'r') as f:
+                data = f.read()
+            f.close()
+            return json.loads(data)
+        except Exception as je:
+            logger.error("cache file write error %s", str(je))
+            error = True
+        finally:
+            if error:
+                return self._build_empty_stats_data()
 
     def _load_cache(self):
         path = os.path.join(self.__get_cache_path(), self.cache_file_name)
@@ -612,7 +627,7 @@ class GitLOC:
             self._cache = self._read_json_file(path=self.__get_cache_path(),
                                                filename=self.cache_file_name)
 
-            if self.repo_name not in self._cache:
+            if self.repo_name not in self._cache.keys():
                 self._cache.update(self._build_empty_stats_data())
                 self._write_json_file(data=self._cache,
                                       path=self.__get_cache_path(),
