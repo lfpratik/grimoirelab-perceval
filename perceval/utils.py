@@ -283,7 +283,7 @@ class GitLOC:
         self.base_path = '~/.perceval/repositories'
         self.git_url = self.__get_processed_uri(url)
         self.uptodate = False
-        self.follow_hierarchy = True
+        self.follow_hierarchy = False
         self._cache = {}
 
     def __del__(self):
