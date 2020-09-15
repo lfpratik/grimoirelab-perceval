@@ -307,9 +307,9 @@ class GitLOC:
     @property
     def org_name(self):
         parser = urlparse(self.git_url)
-        org_name = self._build_org_name(parser.netloc)
+        org_name = self._build_org_name(parser.netloc, False)
         if self.is_gitsource(parser.netloc):
-            org_name = self._build_org_name(parser.path)
+            org_name = self._build_org_name(parser.path, True)
         return org_name
 
     @property
@@ -325,9 +325,9 @@ class GitLOC:
             return sanitize_path.replace('/', '-').replace('_', '-')
         return sanitize_path
 
-    def _build_org_name(self, path):
+    def _build_org_name(self, path, git_source):
         sanitize_path = self.sanitize_url(path)
-        if '.' in sanitize_path:
+        if not git_source:
             return sanitize_path.split('.')[1]
         return sanitize_path.split('/')[0]
 
