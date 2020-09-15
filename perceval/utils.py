@@ -41,6 +41,7 @@ import dateutil.tz
 
 import requests
 
+from urllib.parse import urlparse
 from .errors import ParseError, RepositoryError
 
 
@@ -282,6 +283,7 @@ class GitLOC:
         self.base_path = '~/.perceval/repositories'
         self.git_url = self.__get_processed_uri(url)
         self.uptodate = False
+        self.follow_hierarchy = True
         self._cache = {}
 
     def __del__(self):
@@ -304,11 +306,29 @@ class GitLOC:
 
     @property
     def org_name(self):
-        return self.git_url.split('/')[-2]
+        parser = urlparse(self.git_url)
+        org_name = self._build_org_name(parser.netloc)
+        if self.is_gitsource(parser.netloc):
+            org_name = self._build_org_name(parser.path)
+        return org_name
 
     @property
     def repo_name(self):
-        return self.git_url.split('/')[-1]
+        parser = urlparse(self.git_url)
+        return self._build_repo_name(parser.path, self.org_name)
+
+    def _build_repo_name(self, path, org_name):
+        sanitize_path = self.sanitize_url(path)
+        sanitize_path = sanitize_path.replace(org_name + '/', '')
+        if not self.follow_hierarchy:
+            return sanitize_path.replace('/', '_')
+        return sanitize_path
+
+    def _build_org_name(self, path):
+        sanitize_path = self.sanitize_url(path)
+        if '.' in sanitize_path:
+            return sanitize_path.split('.')[1]
+        return sanitize_path.split('/')[1]
 
     @staticmethod
     def __get_processed_uri(uri):
@@ -326,8 +346,25 @@ class GitLOC:
 
     def __get_git_repo_path(self):
         base_path = self.__get_base_path()
-        repo_dir_name = os.path.join(self.org_name, self.repo_name)
-        return os.path.join(base_path, repo_dir_name)
+        if self.follow_hierarchy:
+            return os.path.join(base_path, self.org_name + self.repo_name)
+        return os.path.join(base_path, self.org_name + self.repo_name)
+
+    @staticmethod
+    def is_gitsource(host):
+        if 'github.com' in host \
+                or 'gitlab.com' in host \
+                or 'bitbucket.org' in host:
+            return True
+        return False
+
+    @staticmethod
+    def sanitize_url(path):
+        if path.startswith('/r/'):
+            path = path.replace('/r', '')
+        elif path.startswith('/gerrit/'):
+            path = path.replace('/gerrit', '')
+        return path
 
     @staticmethod
     def sanitize_os_output(result):
