@@ -542,7 +542,7 @@ class GitLOC:
                 cmd = ['git', 'pull', 'origin', branch]
                 result = self._exec(cmd, env=env)
                 result = self.sanitize_os_output(result)
-                if len(result) >= 18:
+                if len(result) >= 18 and 'Already up to date.' in result:
                     status = True
                 logger.debug("Git %s repository pull updated code",
                              self.repo_path)
