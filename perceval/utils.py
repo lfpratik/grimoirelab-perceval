@@ -365,7 +365,7 @@ class GitLOC:
         return total_size
 
     @staticmethod
-    def get_size_format(size_bytes, factor=1024, suffix="B"):
+    def _get_size_format(size_bytes, factor=1024, suffix="B"):
         """
         Scale bytes to its proper byte format
         e.g:
@@ -374,9 +374,19 @@ class GitLOC:
         """
         for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
             if size_bytes < factor:
-                return f"{size_bytes:.2f}", f"{size_bytes:.2f}{unit}{suffix}"
+                return f"{size_bytes:.2f} {unit}{suffix}"
             size_bytes /= factor
-        return f"{size_bytes:.2f}", f"{size_bytes:.2f}Y{suffix}"
+        return f"{size_bytes:.2f} Y{suffix}"
+
+    @staticmethod
+    def _should_be_delete(size_unit=None):
+        if size_unit:
+            size, unit = size_unit.split(' ')
+            if unit in ['B', 'KB']:
+                return True
+            elif unit == 'MB' and float(size) <= 200:
+                return True
+        return False
 
     @staticmethod
     def is_gitsource(host):
@@ -529,8 +539,8 @@ class GitLOC:
 
         try:
             size_bytes = self._get_repo_size(self.repo_path)
-            size, size_suffix = self.get_size_format(size_bytes)
-            if size <= 200 or force:
+            size = self._get_size_format(size_bytes)
+            if self._should_be_delete(size) or force:
                 self._exec(cmd, env=env)
                 logger.debug("Git %s repository clean", self.repo_path)
             else:
