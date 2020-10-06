@@ -352,6 +352,33 @@ class GitLOC:
         return os.path.join(base_path, '{0}-{1}'.format(self.org_name, self.repo_name))
 
     @staticmethod
+    def _get_repo_size(start_path=None):
+        total_size = 0
+        if start_path:
+            for dirpath, dirnames, filenames in os.walk(start_path):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    # skip if it is symbolic link
+                    if not os.path.islink(fp):
+                        total_size += os.path.getsize(fp)
+
+        return total_size
+
+    @staticmethod
+    def get_size_format(size_bytes, factor=1024, suffix="B"):
+        """
+        Scale bytes to its proper byte format
+        e.g:
+            1253656 => '1.20MB'
+            1253656678 => '1.17GB'
+        """
+        for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+            if size_bytes < factor:
+                return f"{size_bytes:.2f}", f"{size_bytes:.2f}{unit}{suffix}"
+            size_bytes /= factor
+        return f"{size_bytes:.2f}", f"{size_bytes:.2f}Y{suffix}"
+
+    @staticmethod
     def is_gitsource(host):
         if 'github.com' in host \
                 or 'gitlab.com' in host \
@@ -493,7 +520,7 @@ class GitLOC:
         except (RuntimeError, Exception) as cloe:
             logger.error("Git clone error %s ", str(cloe))
 
-    def _clean(self):
+    def _clean(self, force=False):
         cmd = ['rm', '-rf', self.repo_path]
         env = {
             'LANG': 'C',
@@ -501,8 +528,13 @@ class GitLOC:
         }
 
         try:
-            self._exec(cmd, env=env)
-            logger.debug("Git %s repository clean", self.repo_path)
+            size_bytes = self._get_repo_size(self.repo_path)
+            size, size_suffix = self.get_size_format(size_bytes)
+            if size <= 200 or force:
+                self._exec(cmd, env=env)
+                logger.debug("Git %s repository clean", self.repo_path)
+            else:
+                logger.debug("Git %s repository clean skip", self.repo_path)
         except (RuntimeError, Exception) as cle:
             logger.error("Git clone error %s", str(cle))
 
