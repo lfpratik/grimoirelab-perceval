@@ -374,9 +374,9 @@ class GitLOC:
         """
         for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
             if size_bytes < factor:
-                return f"{size_bytes:.2f} {unit}{suffix}"
+                return "{0:.2f} {1}{2}".format(size_bytes, unit, suffix)
             size_bytes /= factor
-        return f"{size_bytes:.2f} Y{suffix}"
+        return "{0:.2f} Y{1}".format(size_bytes, suffix)
 
     @staticmethod
     def _should_be_delete(size_unit=None):
