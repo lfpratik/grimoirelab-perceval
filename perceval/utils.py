@@ -601,7 +601,7 @@ class GitLOC:
         os.chdir(os.path.abspath(self.repo_path))
 
         cmd_fetch = ['git', 'fetch']
-        cmd_fetch_p = ['git', 'fetch']
+        cmd_fetch_p = ['git', 'fetch', '-p']
 
         env = {
             'LANG': 'C',
@@ -696,27 +696,45 @@ class GitLOC:
             self.uptodate = self._pull()
 
     def get_stats(self):
-        loc = self._get_cache_item(self.repo_name, 'loc')
-        pls = self._get_cache_item(self.repo_name, 'pls')
+        try:
+            # Get the cache loc and pls for fallback
+            cache_loc = self._get_cache_item(self.repo_name, 'loc')
+            logger.debug("Cache loc value %s", cache_loc)
+            cache_pls = self._get_cache_item(self.repo_name, 'pls')
 
-        if not self.uptodate or (loc == 0 and len(pls) == 0):
+            # Calculate the loc from source
             result = self._stats(self.repo_path)
-            loc = self._loc(result)
-            pls = self._pls(result)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='loc',
-                                    value=loc)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='pls',
-                                    value=pls)
-            utc_date = datetime.datetime.utcnow()
-            if utc_date.tzinfo is None:
-                utc_date = utc_date.replace(tzinfo=datetime.timezone.utc)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='timestamp',
-                                    value=utc_date.isoformat())
-            self._write_json_file(data=self._cache,
-                                  path=self.__get_cache_path(),
-                                  filename=self.cache_file_name)
 
-        return loc, pls
+            # extract new the loc and pls
+            loc = self._loc(result)
+            logger.debug("New loc value %s", loc)
+            pls = self._pls(result)
+
+            if loc == 0:
+                logger.debug("New loc == 0")
+                # Set cache_loc value if new extracted one will be the zero
+                loc = cache_loc
+                pls = cache_pls
+            else:
+                logger.debug("New loc > 0")
+                # update the cache with new value and timestamp
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='loc',
+                                        value=loc)
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='pls',
+                                        value=pls)
+                utc_date = datetime.datetime.utcnow()
+                if utc_date.tzinfo is None:
+                    utc_date = utc_date.replace(tzinfo=datetime.timezone.utc)
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='timestamp',
+                                        value=utc_date.isoformat())
+                self._write_json_file(data=self._cache,
+                                      path=self.__get_cache_path(),
+                                      filename=self.cache_file_name)
+        except Exception as se:
+            logger.error("get stat error %s", str(se))
+        finally:
+            logger.debug("Final LOC value %s", loc)
+            return loc, pls
