@@ -654,6 +654,8 @@ class GitLOC:
             self.uptodate = self._pull()
 
     def get_stats(self):
+        loc = 0
+        pls = list()
         try:
             # Get the cache loc and pls for fallback
             cache_loc = self._get_cache_item(self.repo_name, 'loc')
