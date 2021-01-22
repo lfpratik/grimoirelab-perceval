@@ -657,7 +657,6 @@ class GitLOC:
         try:
             # Get the cache loc and pls for fallback
             cache_loc = self._get_cache_item(self.repo_name, 'loc')
-            logger.debug("Cache loc value %s", cache_loc)
             cache_pls = self._get_cache_item(self.repo_name, 'pls')
 
             # Calculate the loc from source
@@ -665,16 +664,18 @@ class GitLOC:
 
             # extract new the loc and pls
             loc = self._loc(result)
-            logger.debug("New loc value %s", loc)
             pls = self._pls(result)
 
+            logger.debug("Cache loc value %s", cache_loc)
+            logger.debug("New loc value %s", loc)
+
             if loc == 0:
-                logger.debug("New loc == 0")
+                logger.debug("LOC Value set from old cache")
                 # Set cache_loc value if new extracted one will be the zero
                 loc = cache_loc
                 pls = cache_pls
             else:
-                logger.debug("New loc > 0")
+                logger.debug("Updating LOC value in cache")
                 # update the cache with new value and timestamp
                 self._update_cache_item(project_name=self.repo_name,
                                         key='loc',
@@ -692,7 +693,7 @@ class GitLOC:
                                       path=self.__get_cache_path(),
                                       filename=self.cache_file_name)
         except Exception as se:
-            logger.error("get stat error %s", str(se))
+            logger.error("LOC error %s", str(se))
         finally:
             logger.debug("Final LOC value %s", loc)
             return loc, pls
