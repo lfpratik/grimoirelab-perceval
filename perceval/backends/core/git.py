@@ -573,12 +573,10 @@ class GitParser:
                            for _, item in sorted(self.commit_files.items())]
 
         logger.debug('**SDS** Before commit data total_lines_of_code %s', self.total_lines_of_code)
-        
         commit.update({
             'total_lines_of_code': self.total_lines_of_code,
             'program_language_summary': self.program_language_summary
         })
-
         logger.debug('**SDS** After commit data total_lines_of_code %s', commit['total_lines_of_code'])
 
         self.commit = None
