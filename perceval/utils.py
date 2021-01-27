@@ -322,7 +322,7 @@ class GitLOC:
         if org_name in sanitize_path:
             sanitize_path = sanitize_path.replace('{0}/'.format(self.org_name), '')
         if not self.follow_hierarchy:
-            return sanitize_path.replace('/', '-').replace('_', '-')
+            return sanitize_path.replace('/', '-').replace('_', '-').replace('/.', '').replace('.', '')
         return sanitize_path
 
     def _build_org_name(self, path, git_source):
@@ -333,7 +333,11 @@ class GitLOC:
 
     @staticmethod
     def __get_processed_uri(uri):
-        return uri.lstrip('/').replace('.git', '')
+        removal = '.git'
+        reverse_removal = removal[::-1]
+        replacement = ''
+        reverse_replacement = replacement[::-1]
+        return uri[::-1].replace(reverse_removal, reverse_replacement, 1)[::-1]
 
     def __get_base_path(self):
         return os.path.expanduser(self.base_path)
@@ -380,7 +384,8 @@ class GitLOC:
     @staticmethod
     def _exec(cmd, cwd=None, env=None, ignored_error_codes=None,
               encoding='utf-8'):
-        """Run a command.
+        """
+        Run a command.
 
         Execute `cmd` command in the directory set by `cwd`. Environment
         variables can be set using the `env` dictionary. The output
@@ -430,7 +435,7 @@ class GitLOC:
 
     def _pls(self, result):
         """
-            Get the programing language summary
+        Get the programing language summary
         """
         def extract_program_language_summary(value):
             stats = list()
@@ -467,7 +472,8 @@ class GitLOC:
         return extract_lines_of_code(self.sanitize_os_output(result))
 
     def _clone(self):
-        """Clone a Git repository.
+        """
+        Clone a Git repository.
 
         Make a bare copy of the repository stored in `uri` into `dirpath`.
         The repository would be either local or remote.
@@ -656,11 +662,12 @@ class GitLOC:
     def get_stats(self):
         loc = 0
         pls = list()
-        try:
-            # Get the cache loc and pls for fallback
-            cache_loc = self._get_cache_item(self.repo_name, 'loc')
-            cache_pls = self._get_cache_item(self.repo_name, 'pls')
 
+        # Get the cache loc and pls for fallback
+        cache_loc = self._get_cache_item(self.repo_name, 'loc')
+        cache_pls = self._get_cache_item(self.repo_name, 'pls')
+
+        try:
             # Calculate the loc from source
             result = self._stats(self.repo_path)
 
@@ -672,7 +679,7 @@ class GitLOC:
             logger.debug("New loc value %s", loc)
 
             if loc == 0:
-                logger.debug("LOC Value set from old cache")
+                logger.debug("LOC value set from old cache")
                 # Set cache_loc value if new extracted one will be the zero
                 loc = cache_loc
                 pls = cache_pls
@@ -696,6 +703,10 @@ class GitLOC:
                                       filename=self.cache_file_name)
         except Exception as se:
             logger.error("LOC error %s", str(se))
+            logger.debug("LOC value set from old cache")
+            # Set cache_loc value if loc operations failed
+            loc = cache_loc
+            pls = cache_pls
         finally:
             logger.debug("Final LOC value %s", loc)
             return loc, pls
