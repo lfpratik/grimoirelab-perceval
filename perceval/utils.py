@@ -414,12 +414,12 @@ class GitLOC:
                                     cwd=cwd, env=env)
             (outs, errs) = proc.communicate()
         except OSError as e:
-            raise RuntimeError(cause=str(e))
+            raise RepositoryError(cause=str(e))
 
         if proc.returncode != 0 and proc.returncode not in ignored_error_codes:
             err = errs.decode(encoding, errors='surrogateescape')
             cause = "git command - %s" % err
-            raise RuntimeError(cause=cause)
+            raise RepositoryError(cause=cause)
         else:
             logger.debug(errs.decode(encoding, errors='surrogateescape'))
 
@@ -436,11 +436,11 @@ class GitLOC:
 
         return ''.encode('utf-8')
 
-    def _pls(self, result, force=True):
+    def _pls(self, result, force=False):
         """
         Get the programing language summary
         """
-        def extract_program_language_summary(value, force=True):
+        def extract_program_language_summary(value, force=False):
             stats = list()
             lan_smry_lst = value.split('\n')
             if len(lan_smry_lst) > 0 and ('SUM:' in value or force):
@@ -463,11 +463,11 @@ class GitLOC:
 
         return extract_program_language_summary(self.sanitize_os_output(result), force)
 
-    def _loc(self, result, force=True):
+    def _loc(self, result, force=False):
         """
         Get the total lines of code from the default branch
         """
-        def extract_lines_of_code(value, force=True):
+        def extract_lines_of_code(value, force=False):
             if len(value) > 0 and ('SUM:' in value or force):
                 return int((value.split('\n')[-3]).split(' ')[-1])
             return 0
@@ -502,7 +502,7 @@ class GitLOC:
         except (RuntimeError, Exception) as cloe:
             logger.error('Git clone error %s ', str(cloe))
 
-    def _clean(self, force=False):
+    def _clean(self):
         cmd = ['rm', '-rf', self.repo_path]
         env = {
             'LANG': 'C',
@@ -510,13 +510,8 @@ class GitLOC:
         }
 
         try:
-            size_bytes = self._get_repo_size(self.repo_path)
-            size = self._get_size_format(size_bytes)
-            if self._should_be_delete(size) or force:
-                self._exec(cmd, env=env)
-                logger.debug('Git %s repository clean', self.repo_path)
-            else:
-                logger.debug('Git %s repository clean skip', self.repo_path)
+            self._exec(cmd, env=env)
+            logger.debug("Git %s repository clean", self.repo_path)
         except (RuntimeError, Exception) as cle:
             logger.error('Git clone error %s', str(cle))
 
