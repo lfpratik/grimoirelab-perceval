@@ -386,8 +386,7 @@ class GitLOC:
         return sanitized_output
 
     @staticmethod
-    def _exec(cmd, cwd=None, env=None, ignored_error_codes=None,
-              encoding='utf-8'):
+    def _exec(cmd, cwd=None, env=None, ignored_error_codes=None, encoding='utf-8'):
         """
         Run a command.
 
@@ -406,7 +405,7 @@ class GitLOC:
         if ignored_error_codes is None:
             ignored_error_codes = []
 
-        logger.debug("Running command %s (cwd: %s, env: %s)",
+        logger.debug('Running command %s (cwd: %s, env: %s)',
                      ' '.join(cmd), cwd, str(env))
 
         try:
@@ -415,12 +414,12 @@ class GitLOC:
                                     cwd=cwd, env=env)
             (outs, errs) = proc.communicate()
         except OSError as e:
-            raise RepositoryError(cause=str(e))
+            raise RuntimeError(cause=str(e))
 
         if proc.returncode != 0 and proc.returncode not in ignored_error_codes:
             err = errs.decode(encoding, errors='surrogateescape')
             cause = "git command - %s" % err
-            raise RepositoryError(cause=cause)
+            raise RuntimeError(cause=cause)
         else:
             logger.debug(errs.decode(encoding, errors='surrogateescape'))
 
@@ -437,11 +436,11 @@ class GitLOC:
 
         return ''.encode('utf-8')
 
-    def _pls(self, result, force=False):
+    def _pls(self, result, force=True):
         """
         Get the programing language summary
         """
-        def extract_program_language_summary(value, force=False):
+        def extract_program_language_summary(value, force=True):
             stats = list()
             lan_smry_lst = value.split('\n')
             if len(lan_smry_lst) > 0 and ('SUM:' in value or force):
@@ -464,11 +463,11 @@ class GitLOC:
 
         return extract_program_language_summary(self.sanitize_os_output(result), force)
 
-    def _loc(self, result, force=False):
+    def _loc(self, result, force=True):
         """
         Get the total lines of code from the default branch
         """
-        def extract_lines_of_code(value, force=False):
+        def extract_lines_of_code(value, force=True):
             if len(value) > 0 and ('SUM:' in value or force):
                 return int((value.split('\n')[-3]).split(' ')[-1])
             return 0
@@ -498,12 +497,12 @@ class GitLOC:
 
         try:
             self._exec(cmd, env=env)
-            logger.debug("Git %s repository cloned into %s",
+            logger.debug('Git %s repository cloned into %s',
                          self.git_url, self.repo_path)
         except (RuntimeError, Exception) as cloe:
-            logger.error("Git clone error %s ", str(cloe))
+            logger.error('Git clone error %s ', str(cloe))
 
-    def _clean(self):
+    def _clean(self, force=False):
         cmd = ['rm', '-rf', self.repo_path]
         env = {
             'LANG': 'C',
@@ -511,10 +510,15 @@ class GitLOC:
         }
 
         try:
-            self._exec(cmd, env=env)
-            logger.debug("Git %s repository clean", self.repo_path)
+            size_bytes = self._get_repo_size(self.repo_path)
+            size = self._get_size_format(size_bytes)
+            if self._should_be_delete(size) or force:
+                self._exec(cmd, env=env)
+                logger.debug('Git %s repository clean', self.repo_path)
+            else:
+                logger.debug('Git %s repository clean skip', self.repo_path)
         except (RuntimeError, Exception) as cle:
-            logger.error("Git clone error %s", str(cle))
+            logger.error('Git clone error %s', str(cle))
 
     def _pull(self):
         os.chdir(os.path.abspath(self.repo_path))
@@ -532,20 +536,20 @@ class GitLOC:
             result = self._exec(cmd_short, env=env)
             result = self.sanitize_os_output(result)
             branch = result.replace('origin/', '').strip()
-            logger.debug("Git %s repository active branch is: %s",
+            logger.debug('Git %s repository active branch is: %s',
                          self.repo_path, branch)
         except (RuntimeError, Exception) as be:
-            logger.error("Git find active branch error %s", str(be))
+            logger.error('Git find active branch error %s', str(be))
 
         try:
             if branch:
                 cmd = ['git', 'checkout', branch]
                 self._exec(cmd, env=env)
-                logger.debug("Git %s repository "
-                             "checkout with following branch %s",
+                logger.debug('Git %s repository '
+                             'checkout with following branch %s',
                              self.repo_path, branch)
         except (RuntimeError, Exception) as gce:
-            logger.error("Git checkout error %s", str(gce))
+            logger.error('Git checkout error %s', str(gce))
 
         try:
             if branch:
@@ -554,14 +558,14 @@ class GitLOC:
                 result = self.sanitize_os_output(result)
                 if len(result) >= 18 and 'Already up to date.' in result:
                     status = True
-                logger.debug("Git %s repository pull updated code",
+                logger.debug('Git %s repository pull updated code',
                              self.repo_path)
             else:
-                logger.debug("Git repository active branch missing")
-                logger.debug("Git %s repository pull request skip ",
+                logger.debug('Git repository active branch missing')
+                logger.debug('Git %s repository pull request skip ',
                              self.repo_path)
         except (RuntimeError, Exception) as pe:
-            logger.error("Git pull error %s", str(pe))
+            logger.error('Git pull error %s', str(pe))
 
         return status
 
@@ -578,15 +582,15 @@ class GitLOC:
 
         try:
             self._exec(cmd_fetch, env=env)
-            logger.debug("Git %s fetch updated code", self.repo_path)
+            logger.debug('Git %s fetch updated code', self.repo_path)
         except (RuntimeError, Exception) as fe:
-            logger.error("Git fetch purge error %s", str(fe))
+            logger.error('Git fetch purge error %s', str(fe))
 
         try:
             self._exec(cmd_fetch_p, env=env)
-            logger.debug("Git %s fetch purge code", self.repo_path)
+            logger.debug('Git %s fetch purge code', self.repo_path)
         except (RuntimeError, Exception) as fpe:
-            logger.error("Git fetch purge error %s", str(fpe))
+            logger.error('Git fetch purge error %s', str(fpe))
 
     def _build_empty_stats_data(self):
         stats_data = {
@@ -605,7 +609,7 @@ class GitLOC:
                 f.write(json.dumps(data, indent=4))
             f.close()
         except Exception as je:
-            logger.error("cache file write error %s", str(je))
+            logger.error('cache file write error %s', str(je))
         finally:
             pass
 
@@ -618,7 +622,7 @@ class GitLOC:
             f.close()
             return json.loads(data)
         except Exception as je:
-            logger.error("cache file write error %s", str(je))
+            logger.error('cache file write error %s', str(je))
             error = True
         finally:
             if error:
@@ -682,16 +686,16 @@ class GitLOC:
                 loc = self._loc(result, force=True)
                 pls = self._pls(result, force=True)
 
-            logger.debug("Cache loc value %s", cache_loc)
-            logger.debug("New loc value %s", loc)
+            logger.debug('Cache loc value %s', cache_loc)
+            logger.debug('New loc value %s', loc)
 
             if loc == 0:
-                logger.debug("LOC value set from old cache")
+                logger.debug('LOC value set from old cache')
                 # Set cache_loc value if new extracted one will be the zero
                 loc = cache_loc
                 pls = cache_pls
             else:
-                logger.debug("Updating LOC value in cache")
+                logger.debug('Updating LOC value in cache')
                 # update the cache with new value and timestamp
                 self._update_cache_item(project_name=self.repo_name,
                                         key='loc',
@@ -709,11 +713,11 @@ class GitLOC:
                                       path=self.__get_cache_path(),
                                       filename=self.cache_file_name)
         except Exception as se:
-            logger.error("LOC error %s", str(se))
-            logger.debug("LOC value set from old cache")
-            # Set cache_loc value if loc operations failed
+            logger.error('LOC error %s', str(se))
+            logger.debug('LOC value set from old cache')
+            # Set cache_loc value if cloc fails
             loc = cache_loc
             pls = cache_pls
         finally:
-            logger.debug("Final LOC value %s", loc)
+            logger.debug('Final LOC value %s', loc)
             return loc, pls
