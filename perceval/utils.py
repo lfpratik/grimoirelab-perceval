@@ -597,7 +597,7 @@ class GitLOC:
 
         return extract_lines_of_code(self.sanitize_os_output(result), force)
 
-    @retry(logger=True)
+    @retry(logger=True, exception=RepositoryError)
     def _clone(self):
         """
         Clone a Git repository.
@@ -646,7 +646,7 @@ class GitLOC:
             logger.error('Git clone error %s', str(cle), exc_info=True)
             raise cle
 
-    @retry(logger=True)
+    @retry(logger=True, exception=RepositoryError)
     def _pull(self):
         os.chdir(os.path.abspath(self.repo_path))
         env = {
@@ -699,7 +699,7 @@ class GitLOC:
 
         return status
 
-    @retry(logger=True)
+    @retry(logger=True, exception=RepositoryError)
     def _fetch(self):
         os.chdir(os.path.abspath(self.repo_path))
 

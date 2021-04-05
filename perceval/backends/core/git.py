@@ -848,7 +848,7 @@ class GitRepository:
         }
 
     @classmethod
-    @retry(logger=True)
+    @retry(logger=True, exception=RepositoryError)
     def clone(cls, uri, dirpath):
         """Clone a Git repository.
 
@@ -943,7 +943,7 @@ class GitRepository:
         """
         return self.count_objects() == 0
 
-    @retry(logger=True)
+    @retry(logger=True, exception=RepositoryError)
     def update(self):
         """Update repository from its remote.
 
