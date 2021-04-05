@@ -36,6 +36,7 @@ from perceval.backends.core.github import (GitHub,
                                            MAX_CATEGORY_ITEMS_PER_PAGE)
 from ...client import HttpClient
 from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME
+from ...log_events import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_EVENT = "event"
 
@@ -229,6 +230,10 @@ QUERY_TEMPLATE = """
     """
 
 logger = logging.getLogger(__name__)
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 
 class GitHubQL(GitHub):

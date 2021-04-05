@@ -44,10 +44,15 @@ from ...backend import (Backend,
                         BackendCommandArgumentParser)
 from ...errors import RepositoryError, ParseError
 from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME, GitLOC
+from ...log_events import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_COMMIT = 'commit'
 
 logger = logging.getLogger(__name__)
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 
 class Git(Backend):
@@ -857,18 +862,21 @@ class GitRepository:
         :raises RepositoryError: when an error occurs cloning the given
             repository
         """
-        cmd = ['git', 'clone', '--bare', uri, dirpath]
-        env = {
-            'LANG': 'C',
-            'HOME': os.getenv('HOME', '')
-        }
+        try:
+            cmd = ['git', 'clone', '--bare', uri, dirpath]
+            env = {
+                'LANG': 'C',
+                'HOME': os.getenv('HOME', '')
+            }
 
-        cls._exec(cmd, env=env)
+            cls._exec(cmd, env=env)
 
-        logger.debug("Git %s repository cloned into %s",
-                     uri, dirpath)
+            logger.debug("Git %s repository cloned into %s", uri, dirpath)
 
-        return cls(uri, dirpath)
+            return cls(uri, dirpath)
+        except (Exception, RuntimeError, RepositoryError) as re:
+            logger.error("Git %s repository cloned", str(re))
+            raise re
 
     def count_objects(self):
         """Count the objects of a repository.
@@ -945,11 +953,15 @@ class GitRepository:
         :raises RepositoryError: when an error occurs updating the
             repository
         """
-        cmd_update = ['git', 'fetch', 'origin', '+refs/heads/*:refs/heads/*', '--prune']
-        self._exec(cmd_update, cwd=self.dirpath, env=self.gitenv)
-
-        logger.debug("Git %s repository updated into %s",
-                     self.uri, self.dirpath)
+        try:
+            cmd_update = ['git', 'fetch', 'origin',
+                          '+refs/heads/*:refs/heads/*', '--prune']
+            self._exec(cmd_update, cwd=self.dirpath, env=self.gitenv)
+            logger.debug("Git %s repository updated into %s",
+                         self.uri, self.dirpath)
+        except (RuntimeError, Exception, RepositoryError) as re:
+            logger.error("Git %s repository update", str(re))
+            raise re
 
     def sync(self):
         """Keep the repository in sync.

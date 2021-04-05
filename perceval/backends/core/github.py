@@ -47,6 +47,7 @@ from ...backend import (Backend,
                         DEFAULT_SEARCH_FIELD)
 from ...client import HttpClient, RateLimitHandler
 from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME
+from ...log_events import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_ISSUE = "issue"
 CATEGORY_PULL_REQUEST = "pull_request"
@@ -74,6 +75,10 @@ TARGET_ISSUE_FIELDS = ['user', 'assignee', 'assignees', 'comments', 'reactions']
 TARGET_PULL_FIELDS = ['user', 'review_comments', 'requested_reviewers', 'merged_by', 'commits', 'assignee', 'assignees']
 
 logger = logging.getLogger(__name__)
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 
 class GitHub(Backend):

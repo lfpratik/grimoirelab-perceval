@@ -38,6 +38,7 @@ from ...backend import (Backend,
                         OriginUniqueField)
 from ...errors import BackendError
 from ...utils import DEFAULT_DATETIME
+from ...log_events import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_REVIEW = "review"
 
@@ -45,6 +46,10 @@ MAX_REVIEWS = 500  # Maximum number of reviews per query
 PORT = '29418'
 
 logger = logging.getLogger(__name__)
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 
 class Gerrit(Backend):

@@ -44,6 +44,7 @@ from ...backend import (Backend,
 from ...client import HttpClient, RateLimitHandler
 from ...utils import DEFAULT_DATETIME
 from ...errors import BackendError, HttpClientError
+from ...utils import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_ISSUE = "issue"
 CATEGORY_MERGE_REQUEST = "merge_request"
@@ -64,6 +65,10 @@ DEFAULT_RETRY_AFTER_STATUS_CODES = [500, 502]
 TARGET_ISSUE_FIELDS = ['user_notes_count', 'award_emoji']
 
 logger = logging.getLogger(__name__)
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 
 class GitLab(Backend):
