@@ -31,7 +31,8 @@ class SDSSMTPHandler(SMTPHandler):
             'Function:- %(funcName)s\n'
             'Line:- %(lineno)d\n'
             'Level:- %(levelname)s\n'
-            'Message: %(message)s\n')
+            'Message: %(message)s\n'
+            'Traceback: %(exc_text)s\n')
         return format
 
     def getSubject(self, record):

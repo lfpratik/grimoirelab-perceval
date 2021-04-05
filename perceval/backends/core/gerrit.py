@@ -453,7 +453,7 @@ class GerritClient():
                 result = subprocess.check_output(cmd, shell=True)
                 break
             except subprocess.CalledProcessError as ex:
-                logger.error("gerrit cmd %s failed: %s", cmd, ex)
+                logger.error("gerrit cmd %s failed: %s", cmd, ex, exc_info=True)
                 time.sleep(self.RETRY_WAIT * retries)
                 retries += 1
 

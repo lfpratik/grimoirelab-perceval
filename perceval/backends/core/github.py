@@ -864,7 +864,7 @@ class GitHubClient(HttpClient, RateLimitHandler):
         except requests.exceptions.HTTPError as error:
             # 404 not found is wrongly received sometimes
             if error.response.status_code == 404:
-                logger.error("Can't get github login orgs: %s", error)
+                logger.error("Can't get github login orgs: %s", error, exc_info=True)
                 orgs = '[]'
             else:
                 raise error

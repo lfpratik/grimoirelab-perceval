@@ -875,7 +875,7 @@ class GitRepository:
 
             return cls(uri, dirpath)
         except (Exception, RuntimeError, RepositoryError) as re:
-            logger.error("Git %s repository cloned", str(re))
+            logger.error("Git %s repository cloned", str(re), exc_info=True)
             raise re
 
     def count_objects(self):
@@ -960,7 +960,7 @@ class GitRepository:
             logger.debug("Git %s repository updated into %s",
                          self.uri, self.dirpath)
         except (RuntimeError, Exception, RepositoryError) as re:
-            logger.error("Git %s repository update", str(re))
+            logger.error("Git %s repository update", str(re), exc_info=True)
             raise re
 
     def sync(self):

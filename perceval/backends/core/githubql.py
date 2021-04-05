@@ -484,7 +484,7 @@ class GitHubQLClient(GitHubClient):
             items = response.json()
             if 'errors' in items:
                 logger.error("Events not collected for issue %s in %s/%s due to: %s" %
-                             (issue_number, self.owner, self.repository, items['errors'][0]['message']))
+                             (issue_number, self.owner, self.repository, items['errors'][0]['message']), exc_info=True)
                 return []
 
             timelines = items['data']['repository'][node_type]['timelineItems']
