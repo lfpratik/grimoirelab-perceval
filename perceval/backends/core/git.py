@@ -43,7 +43,7 @@ from ...backend import (Backend,
                         BackendCommand,
                         BackendCommandArgumentParser)
 from ...errors import RepositoryError, ParseError
-from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME, GitLOC
+from ...utils import DEFAULT_DATETIME, DEFAULT_LAST_DATETIME, GitLOC, retry
 from ...log_events import get_smtp_handler, SDSSMTPHandler
 
 CATEGORY_COMMIT = 'commit'
@@ -848,6 +848,7 @@ class GitRepository:
         }
 
     @classmethod
+    @retry(logger=True)
     def clone(cls, uri, dirpath):
         """Clone a Git repository.
 
@@ -942,6 +943,7 @@ class GitRepository:
         """
         return self.count_objects() == 0
 
+    @retry(logger=True)
     def update(self):
         """Update repository from its remote.
 
