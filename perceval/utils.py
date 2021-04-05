@@ -28,11 +28,14 @@ import datetime
 import email
 import json
 import logging
+import logging.handlers
 import mailbox
 import re
 import sys
 import os
 import subprocess
+import time
+from functools import partial, wraps
 
 import xml.etree.ElementTree
 
@@ -43,10 +46,14 @@ import requests
 
 from urllib.parse import urlparse
 from .errors import ParseError, RepositoryError
+from .log_events import get_smtp_handler, SDSSMTPHandler
 
 
 logger = logging.getLogger(__name__)
-
+smtp_handler = get_smtp_handler()
+smtp_handler.setLevel(SDSSMTPHandler.get_log_level())
+smtp_handler.setFormatter(SDSSMTPHandler.get_log_format())
+logger.addHandler(smtp_handler)
 
 DEFAULT_DATETIME = datetime.datetime(1970, 1, 1, 0, 0, 0,
                                      tzinfo=dateutil.tz.tzutc())
@@ -544,8 +551,9 @@ class GitLOC:
             self._exec(cmd, env=env)
             logger.debug('Git %s repository cloned into %s',
                          self.git_url, self.repo_path)
-        except (RuntimeError, Exception) as cloe:
+        except (RuntimeError, Exception, RepositoryError) as cloe:
             logger.error('Git clone error %s ', str(cloe))
+            raise cloe
 
     def _clean(self, force=False):
         cmd = ['rm', '-rf', self.repo_path]
@@ -564,6 +572,7 @@ class GitLOC:
                 logger.debug("Git %s repository clean skip", self.repo_path)
         except (RuntimeError, Exception) as cle:
             logger.error('Git clone error %s', str(cle))
+            raise cle
 
     def _pull(self):
         os.chdir(os.path.abspath(self.repo_path))
@@ -583,8 +592,9 @@ class GitLOC:
             branch = result.replace('origin/', '').strip()
             logger.debug('Git %s repository active branch is: %s',
                          self.repo_path, branch)
-        except (RuntimeError, Exception) as be:
+        except (RuntimeError, Exception, RepositoryError) as be:
             logger.error('Git find active branch error %s', str(be))
+            raise be
 
         try:
             if branch:
@@ -593,8 +603,9 @@ class GitLOC:
                 logger.debug('Git %s repository '
                              'checkout with following branch %s',
                              self.repo_path, branch)
-        except (RuntimeError, Exception) as gce:
+        except (RuntimeError, Exception, RepositoryError) as gce:
             logger.error('Git checkout error %s', str(gce))
+            raise gce
 
         try:
             if branch:
@@ -609,8 +620,9 @@ class GitLOC:
                 logger.debug('Git repository active branch missing')
                 logger.debug('Git %s repository pull request skip ',
                              self.repo_path)
-        except (RuntimeError, Exception) as pe:
+        except (RuntimeError, Exception, RepositoryError) as pe:
             logger.error('Git pull error %s', str(pe))
+            raise pe
 
         return status
 
@@ -628,14 +640,16 @@ class GitLOC:
         try:
             self._exec(cmd_fetch, env=env)
             logger.debug('Git %s fetch updated code', self.repo_path)
-        except (RuntimeError, Exception) as fe:
+        except (RuntimeError, Exception, RepositoryError) as fe:
             logger.error('Git fetch purge error %s', str(fe))
+            raise fe
 
         try:
             self._exec(cmd_fetch_p, env=env)
             logger.debug('Git %s fetch purge code', self.repo_path)
-        except (RuntimeError, Exception) as fpe:
+        except (RuntimeError, Exception, RepositoryError) as fpe:
             logger.error('Git fetch purge error %s', str(fpe))
+            raise fpe
 
     def _build_empty_stats_data(self):
         stats_data = {
