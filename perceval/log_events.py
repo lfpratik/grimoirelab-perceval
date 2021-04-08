@@ -67,13 +67,15 @@ class SDSSMTPHandler(SMTPHandler):
 
 
 def get_smtp_handler():
+    fromaddr = os.environ.get('LE_FROMADDR')
+    access_me = os.environ.get('LE_PASSWORD')
+    toaddrs = os.environ.get('LE_TOADDRS').split(',')
     return SDSSMTPHandler(
         mailhost=('smtp.gmail.com', 465),
-        fromaddr='dev.analytics.error.bot@gmail.com',
-        toaddrs=['pratikk@proximabiz.com', 'sgupta@linuxfoundation.org',
-                 'fghiasy@linuxfoundation.org'],
+        fromaddr=fromaddr,
+        toaddrs=toaddrs,
         subject='SDS Error - log',
-        credentials=('dev.analytics.error.bot@gmail.com', 'Mobile@311!'),
+        credentials=(fromaddr, access_me),
         timeout=5.0,
         secure=None
     )
