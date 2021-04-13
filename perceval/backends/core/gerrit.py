@@ -83,6 +83,8 @@ class Gerrit(Backend):
                  disable_host_key_check=False, id_filepath=None,
                  tag=None, archive=None, blacklist_ids=None):
         origin = hostname
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = origin
 
         super().__init__(origin, tag=tag, archive=archive, blacklist_ids=blacklist_ids)
         self.hostname = hostname

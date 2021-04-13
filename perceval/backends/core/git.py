@@ -86,6 +86,8 @@ class Git(Backend):
         self.uri = uri
         self.gitpath = gitpath
         self.git_loc = GitLOC(self.uri)
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = uri
 
     def fetch(self, category=CATEGORY_COMMIT, from_date=DEFAULT_DATETIME, to_date=DEFAULT_LAST_DATETIME,
               branches=None, latest_items=False, no_update=False):

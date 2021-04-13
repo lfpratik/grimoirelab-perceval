@@ -143,6 +143,8 @@ class GitHub(Backend):
             api_token = []
         origin = base_url if base_url else GITHUB_URL
         origin = urijoin(origin, owner, repository)
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = origin
 
         super().__init__(origin, tag=tag, archive=archive, ssl_verify=ssl_verify)
 
