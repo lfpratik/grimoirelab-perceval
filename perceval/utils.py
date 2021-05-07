@@ -292,6 +292,8 @@ class GitLOC:
         self.uptodate = False
         self.follow_hierarchy = False
         self._cache = {}
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = url
 
     def __del__(self):
         pass
