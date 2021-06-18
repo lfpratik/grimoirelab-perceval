@@ -33,6 +33,7 @@
 
 import datetime
 import dateutil
+import json
 import os
 import time
 import unittest
@@ -104,6 +105,9 @@ GITHUB_ENTREPRISE_PULL_REQUEST_1_COMMITS = GITHUB_ENTREPRISE_PULL_REQUEST_1_URL 
 GITHUB_ENTREPRISE_PULL_REQUEST_1_REVIEWS = GITHUB_ENTREPRISE_PULL_REQUEST_1_URL + "/reviews"
 GITHUB_ENTREPRISE_PULL_REQUEST_1_COMMENTS_2_REACTIONS = GITHUB_ENTERPRISE_PULL_REQUESTS_URL + "/comments/2/reactions"
 GITHUB_ENTREPRISE_REQUEST_REQUESTED_REVIEWERS_URL = GITHUB_ENTREPRISE_PULL_REQUEST_1_URL + "/requested_reviewers"
+GITHUB_APP_INSTALLATION_URL = GITHUB_API_URL + '/app/installations'
+GITHUB_APP_ACCESS_TOKEN_URL = GITHUB_APP_INSTALLATION_URL + '/1/access_tokens'
+GITHUB_APP_AUTH_URL = GITHUB_API_URL + '/installation/repositories'
 
 
 def read_file(filename, mode='r'):
@@ -2701,6 +2705,18 @@ class TestGitHubBackend(unittest.TestCase):
         github = GitHub("zhquan_example", "repo", ["aaa"])
         _ = [issues for issues in github.fetch()]
 
+        # Check that a RetryError getting user orgs is managed
+        GitHubClient._users_orgs.clear()  # clean cache to get orgs using the API
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_ORGS_URL,
+                               body="", status=403,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+        github = GitHub("zhquan_example", "repo", ["aaa"], max_retries=0)
+        _ = [issues for issues in github.fetch()]
+
         # Check that a no 402 exception getting user orgs is raised
         GitHubClient._users_orgs.clear()
         httpretty.register_uri(httpretty.GET,
@@ -3169,6 +3185,65 @@ class TestGitHubClient(unittest.TestCase):
 
         self.assertDictEqual(httpretty.last_request().querystring, expected)
         self.assertEqual(httpretty.last_request().headers["Authorization"], "token aaa")
+
+    @httpretty.activate
+    def test_issues_github_app(self):
+        """Test issues API call using GitHub APP"""
+
+        issues = read_file('data/github/github_request')
+        rate_limit = read_file('data/github/rate_limit')
+        installation = [
+            {
+                "account": {
+                    "login": "zhquan_example"
+                },
+                "id": "1"
+            }
+        ]
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_RATE_LIMIT,
+                               body=rate_limit,
+                               status=200,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_ISSUES_URL,
+                               body=issues, status=200,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '5',
+                                   'X-RateLimit-Reset': '5'
+                               })
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_APP_INSTALLATION_URL,
+                               body=json.dumps(installation), status=200)
+
+        httpretty.register_uri(httpretty.POST,
+                               GITHUB_APP_ACCESS_TOKEN_URL,
+                               body='{"token": "v1.aaa"}', status=200)
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_APP_AUTH_URL,
+                               body='', status=200)
+
+        client = GitHubClient("zhquan_example", "repo", github_app_id='1', github_app_pk_filepath='data/github/private.pem')
+        raw_issues = [issues for issues in client.issues()]
+        self.assertEqual(raw_issues[0], issues)
+
+        # Check requests
+        expected = {
+            'per_page': ['100'],
+            'state': ['all'],
+            'direction': ['asc'],
+            'sort': ['updated']
+        }
+
+        self.assertDictEqual(httpretty.last_request().querystring, expected)
+        self.assertEqual(httpretty.last_request().headers["Authorization"], "token v1.aaa")
 
     @httpretty.activate
     def test_issue_comments(self):
@@ -4121,6 +4196,33 @@ class TestGitHubClient(unittest.TestCase):
         self.assertEqual(headers, san_h)
         self.assertEqual(payload, san_p)
 
+    @httpretty.activate
+    def test_no_user_info(self):
+        """Test get_user returns 404"""
+
+        rate_limit = read_file('data/github/rate_limit')
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_RATE_LIMIT,
+                               body=rate_limit,
+                               status=200,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_API_URL + '/users/no_exist',
+                               body='', status=404,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+
+        client = GitHubClient("no_exist", "repo", ["aaa"], None)
+        response = client.user("no_exist")
+        self.assertEqual(response, '{}')
+
 
 class TestGitHubCommand(unittest.TestCase):
     """GitHubCommand unit tests"""
@@ -4170,7 +4272,8 @@ class TestGitHubCommand(unittest.TestCase):
                 '--max-items', '10',
                 '--sleep-time', '10',
                 '--tag', 'test', '--no-archive',
-                '--api-token', 'abcdefgh', 'ijklmnop',
+                '--github-app-id', '1',
+                '--github-app-pk-filepath', 'data/github/private.pem',
                 '--from-date', '1970-01-01',
                 '--to-date', '2100-01-01',
                 '--no-ssl-verify',
@@ -4190,7 +4293,8 @@ class TestGitHubCommand(unittest.TestCase):
         self.assertEqual(parsed_args.to_date, DEFAULT_LAST_DATETIME)
         self.assertTrue(parsed_args.no_archive)
         self.assertFalse(parsed_args.ssl_verify)
-        self.assertEqual(parsed_args.api_token, ['abcdefgh', 'ijklmnop'])
+        self.assertEqual(parsed_args.github_app_id, '1')
+        self.assertEqual(parsed_args.github_app_pk_filepath, 'data/github/private.pem')
 
 
 if __name__ == "__main__":
