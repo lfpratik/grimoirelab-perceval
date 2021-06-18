@@ -524,7 +524,6 @@ class GitLOC:
 
         logger.debug('Running command %s (cwd: %s, env: %s)',
                      ' '.join(cmd), cwd, str(env))
-
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
