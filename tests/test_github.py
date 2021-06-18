@@ -2705,6 +2705,18 @@ class TestGitHubBackend(unittest.TestCase):
         github = GitHub("zhquan_example", "repo", ["aaa"])
         _ = [issues for issues in github.fetch()]
 
+        # Check that a RetryError getting user orgs is managed
+        GitHubClient._users_orgs.clear()  # clean cache to get orgs using the API
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_ORGS_URL,
+                               body="", status=403,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+        github = GitHub("zhquan_example", "repo", ["aaa"], max_retries=0)
+        _ = [issues for issues in github.fetch()]
+
         # Check that a no 402 exception getting user orgs is raised
         GitHubClient._users_orgs.clear()
         httpretty.register_uri(httpretty.GET,
@@ -4183,6 +4195,33 @@ class TestGitHubClient(unittest.TestCase):
         self.assertEqual(url, san_u)
         self.assertEqual(headers, san_h)
         self.assertEqual(payload, san_p)
+
+    @httpretty.activate
+    def test_no_user_info(self):
+        """Test get_user returns 404"""
+
+        rate_limit = read_file('data/github/rate_limit')
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_RATE_LIMIT,
+                               body=rate_limit,
+                               status=200,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+
+        httpretty.register_uri(httpretty.GET,
+                               GITHUB_API_URL + '/users/no_exist',
+                               body='', status=404,
+                               forcing_headers={
+                                   'X-RateLimit-Remaining': '20',
+                                   'X-RateLimit-Reset': '15'
+                               })
+
+        client = GitHubClient("no_exist", "repo", ["aaa"], None)
+        response = client.user("no_exist")
+        self.assertEqual(response, '{}')
 
 
 class TestGitHubCommand(unittest.TestCase):
