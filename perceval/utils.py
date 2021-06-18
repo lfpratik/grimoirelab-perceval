@@ -542,13 +542,16 @@ class GitLOC:
         return outs
 
     def _stats(self, path):
+        stream = os.popen('which cloc')
+        cloc = stream.read().strip()
+
         if path and os.path.exists(path):
-            cmd = ['cloc', path]
+            cmd = [cloc, '.']
             env = {
                 'LANG': 'C',
                 'HOME': os.getenv('HOME', '')
             }
-            return self._exec(cmd, env=env)
+            return self._exec(cmd, cwd=self.repo_path, env=env)
 
         return ''.encode('utf-8')
 
@@ -619,14 +622,14 @@ class GitLOC:
         :raises RepositoryError: when an error occurs cloning the given
             repository
         """
-        cmd = ['git', 'clone', self.git_url, self.repo_path]
+        cmd = ['git', 'clone', self.git_url, '.']
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
         }
 
         try:
-            self._exec(cmd, env=env)
+            self._exec(cmd, cwd=self.repo_path, env=env)
             logger.debug('Git %s repository cloned into %s',
                          self.git_url, self.repo_path)
         except (RuntimeError, Exception, RepositoryError) as cloe:
@@ -654,7 +657,6 @@ class GitLOC:
 
     @retry(logger=True, exception=RepositoryError)
     def _pull(self):
-        os.chdir(os.path.abspath(self.repo_path))
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
@@ -665,8 +667,8 @@ class GitLOC:
         try:
             cmd_auto = ['git', 'remote', 'set-head', 'origin', '--auto']
             cmd_short = ['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']
-            self._exec(cmd_auto, env=env)
-            result = self._exec(cmd_short, env=env)
+            self._exec(cmd_auto, cwd=self.repo_path, env=env)
+            result = self._exec(cmd_short, cwd=self.repo_path, env=env)
             result = self.sanitize_os_output(result)
             branch = result.replace('origin/', '').strip()
             logger.debug('Git %s repository active branch is: %s',
@@ -678,7 +680,7 @@ class GitLOC:
         try:
             if branch:
                 cmd = ['git', 'checkout', branch]
-                self._exec(cmd, env=env)
+                self._exec(cmd, cwd=self.repo_path, env=env)
                 logger.debug('Git %s repository '
                              'checkout with following branch %s',
                              self.repo_path, branch)
@@ -689,7 +691,7 @@ class GitLOC:
         try:
             if branch:
                 cmd = ['git', 'pull', 'origin', branch]
-                result = self._exec(cmd, env=env)
+                result = self._exec(cmd, cwd=self.repo_path, env=env)
                 result = self.sanitize_os_output(result)
                 if len(result) >= 18 and 'Already up to date.' in result:
                     status = True
@@ -707,10 +709,8 @@ class GitLOC:
 
     @retry(logger=True, exception=RepositoryError)
     def _fetch(self):
-        os.chdir(os.path.abspath(self.repo_path))
-
         cmd_fetch = ['git', 'fetch']
-        cmd_fetch_p = ['git', 'fetch', '-p']
+        cmd_fetch_p = ['git', 'fetch', '--all', '-p']
 
         env = {
             'LANG': 'C',
@@ -718,14 +718,14 @@ class GitLOC:
         }
 
         try:
-            self._exec(cmd_fetch, env=env)
+            self._exec(cmd_fetch, cwd=self.repo_path, env=env)
             logger.debug('Git %s fetch updated code', self.repo_path)
         except (RuntimeError, Exception, RepositoryError) as fe:
             logger.error('Git fetch purge error %s', str(fe), exc_info=True)
             raise fe
 
         try:
-            self._exec(cmd_fetch_p, env=env)
+            self._exec(cmd_fetch_p, cwd=self.repo_path, env=env)
             logger.debug('Git %s fetch purge code', self.repo_path)
         except (RuntimeError, Exception, RepositoryError) as fpe:
             logger.error('Git fetch purge error %s', str(fpe), exc_info=True)
