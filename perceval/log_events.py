@@ -1,3 +1,4 @@
+import os
 import logging
 from logging.handlers import SMTPHandler
 
@@ -8,6 +9,8 @@ Thanks to: https://stackoverflow.com/questions/9235997/is-there-a-way-how-to-con
 
 
 class SDSSMTPHandler(SMTPHandler):
+
+    SDS_SYNC_URL = None
 
     @classmethod
     def get_log_level(cls, level=None):
@@ -25,6 +28,7 @@ class SDSSMTPHandler(SMTPHandler):
     @classmethod
     def get_log_format(cls):
         format = logging.Formatter(
+            'SDS Sync Url: %(SDS_SYNC_URL)s\n'
             'Time:- %(asctime)s\n'
             'File:- %(filename)s\n'
             'Module:- %(module)s\n'
@@ -36,7 +40,8 @@ class SDSSMTPHandler(SMTPHandler):
         return format
 
     def getSubject(self, record):
-        return 'SDS | Error from {0}'.format(record.module)
+        env = os.environ.get('ENVIRONMENT', 'Local')
+        return 'SDS {0} | Error from {1}'.format(env, record.module)
 
     def emit(self, record):
         """
@@ -51,6 +56,7 @@ class SDSSMTPHandler(SMTPHandler):
             if not port:
                 port = smtplib.SMTP_PORT
             smtp = smtplib.SMTP_SSL(self.mailhost, port, timeout=5.0)
+            setattr(record, 'SDS_SYNC_URL', self.SDS_SYNC_URL)
             msg = self.format(record)
             msg = "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n\r\n%s" % (
             self.fromaddr, ", ".join(self.toaddrs), self.getSubject(record),
@@ -67,13 +73,15 @@ class SDSSMTPHandler(SMTPHandler):
 
 
 def get_smtp_handler():
+    fromaddr = os.environ.get('LE_FROMADDR')
+    access_me = os.environ.get('LE_PASSWORD')
+    toaddrs = os.environ.get('LE_TOADDRS').split(',')
     return SDSSMTPHandler(
         mailhost=('smtp.gmail.com', 465),
-        fromaddr='dev.analytics.error.bot@gmail.com',
-        toaddrs=['pratikk@proximabiz.com', 'sgupta@linuxfoundation.org',
-                 'fghiasy@linuxfoundation.org'],
+        fromaddr=fromaddr,
+        toaddrs=toaddrs,
         subject='SDS Error - log',
-        credentials=('dev.analytics.error.bot@gmail.com', 'Mobile@311!'),
+        credentials=(fromaddr, access_me),
         timeout=5.0,
         secure=None
     )

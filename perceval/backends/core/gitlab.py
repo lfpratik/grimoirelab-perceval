@@ -110,6 +110,8 @@ class GitLab(Backend):
                  blacklist_ids=None, extra_retry_after_status=None, ssl_verify=True):
         origin = base_url if base_url else GITLAB_URL
         origin = urijoin(origin, owner, repository)
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = origin
 
         if not api_token and is_oauth_token:
             raise BackendError(cause="is_oauth_token is True but api_token is None")

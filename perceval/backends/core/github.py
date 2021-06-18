@@ -143,6 +143,8 @@ class GitHub(Backend):
             api_token = []
         origin = base_url if base_url else GITHUB_URL
         origin = urijoin(origin, owner, repository)
+        global smtp_handler
+        smtp_handler.SDS_SYNC_URL = origin
 
         super().__init__(origin, tag=tag, archive=archive, ssl_verify=ssl_verify)
 
@@ -846,9 +848,17 @@ class GitHubClient(HttpClient, RateLimitHandler):
 
         logger.debug("Getting info for %s" % url_user)
 
-        r = self.fetch(url_user)
-        user = r.text
-        self._users[login] = user
+        try:
+            r = self.fetch(url_user)
+            user = r.text
+            self._users[login] = user
+        except requests.exceptions.HTTPError as error:
+            # When the login is no longer exist or the token has no permission
+            if error.response.status_code == 404:
+                logger.error("Can't get github login: %s", error)
+                user = '{}'
+            else:
+                raise error
 
         return user
 
@@ -868,6 +878,9 @@ class GitHubClient(HttpClient, RateLimitHandler):
                 orgs = '[]'
             else:
                 raise error
+        except requests.exceptions.RetryError as error:
+            logger.error("Can't get github login orgs: %s", error)
+            orgs = '[]'
 
         self._users_orgs[login] = orgs
 
