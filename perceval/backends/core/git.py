@@ -529,6 +529,7 @@ class GitParser:
         self.commit = None
         self.commit_files = {}
         loc, pls = self.__get_stats()
+        self.__cleanup()
         self.total_lines_of_code = loc
         self.program_language_summary = pls
 
@@ -752,6 +753,11 @@ class GitParser:
         if repo:
             return repo.git_loc.get_stats()
         return 0, []
+
+    def __cleanup(self):
+        repo = self.stream.gi_frame.f_locals.get('self')
+        if repo:
+            repo.git_loc._clean()
 
 
 class EmptyRepositoryError(RepositoryError):
