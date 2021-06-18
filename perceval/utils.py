@@ -322,7 +322,7 @@ class GitLOC:
         if org_name in sanitize_path:
             sanitize_path = sanitize_path.replace('{0}/'.format(self.org_name), '')
         if not self.follow_hierarchy:
-            return sanitize_path.replace('/', '-').replace('_', '-')
+            return sanitize_path.replace('/', '-').replace('_', '-').replace('/.', '').replace('.', '')
         return sanitize_path
 
     def _build_org_name(self, path, git_source):
@@ -333,7 +333,15 @@ class GitLOC:
 
     @staticmethod
     def __get_processed_uri(uri):
-        return uri.lstrip('/').replace('.git', '')
+        removal = '.git'
+        reverse_removal = removal[::-1]
+        replacement = ''
+        reverse_replacement = replacement[::-1]
+        end = len(uri)
+        start = end - 4
+        if uri.endswith(removal, start, end):
+            return uri[::-1].replace(reverse_removal, reverse_replacement, 1)[::-1]
+        return uri
 
     def __get_base_path(self):
         return os.path.expanduser(self.base_path)
@@ -415,9 +423,9 @@ class GitLOC:
         return sanitized_output
 
     @staticmethod
-    def _exec(cmd, cwd=None, env=None, ignored_error_codes=None,
-              encoding='utf-8'):
-        """Run a command.
+    def _exec(cmd, cwd=None, env=None, ignored_error_codes=None, encoding='utf-8'):
+        """
+        Run a command.
 
         Execute `cmd` command in the directory set by `cwd`. Environment
         variables can be set using the `env` dictionary. The output
@@ -434,12 +442,12 @@ class GitLOC:
         if ignored_error_codes is None:
             ignored_error_codes = []
 
-        logger.debug("Running command %s (cwd: %s, env: %s)",
+        logger.debug('Running command %s (cwd: %s, env: %s)',
                      ' '.join(cmd), cwd, str(env))
-
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
+
                                     cwd=cwd, env=env)
             (outs, errs) = proc.communicate()
         except OSError as e:
@@ -455,40 +463,50 @@ class GitLOC:
         return outs
 
     def _stats(self, path):
+        stream = os.popen('which cloc')
+        cloc = stream.read().strip()
+
         if path and os.path.exists(path):
-            cmd = ['cloc', path]
+            cmd = [cloc, '.']
             env = {
                 'LANG': 'C',
                 'HOME': os.getenv('HOME', '')
             }
-            return self._exec(cmd, env=env)
+            return self._exec(cmd, cwd=self.repo_path, env=env)
 
         return ''.encode('utf-8')
 
     def _pls(self, result):
         """
-            Get the programing language summary
+        Get the programing language summary
         """
         def extract_program_language_summary(value):
             stats = list()
-            lan_smry_lst = value.split('\n')
-            if 'SUM:' in value and len(lan_smry_lst) > 0:
-                for smry in lan_smry_lst[::-1]:
-                    if smry.startswith('---') or len(smry) == 0:
-                        continue
-                    elif smry.startswith('Language'):
-                        break
-                    else:
-                        smry_result = smry.split()
-                        stats.append({
-                            'language': smry_result[0].replace('SUM:', 'Total'),
-                            'files': smry_result[1],
-                            'blank': smry_result[2],
-                            'comment': smry_result[3],
-                            'code': smry_result[4]
-                        })
-
-            return stats
+            language = False
+            try:
+                lan_smry_lst = value.split('\n')
+                if len(lan_smry_lst) > 0 and ('SUM:' in value
+                                              or 'Language:' in value):
+                    for smry in lan_smry_lst:
+                        if smry.startswith('---') or len(smry) == 0:
+                            continue
+                        elif smry.startswith('Language'):
+                            language = True
+                            continue
+                        else:
+                            if language:
+                                smry_result = smry.split()
+                                stats.append({
+                                    'language': smry_result[0].replace('SUM:', 'Total'),
+                                    'files': smry_result[1],
+                                    'blank': smry_result[2],
+                                    'comment': smry_result[3],
+                                    'code': smry_result[4]
+                                })
+            except (Exception, RuntimeError) as re:
+                logger.error('Extract program language summary %s ', str(re), exc_info=True)
+            finally:
+                return stats
 
         return extract_program_language_summary(self.sanitize_os_output(result))
 
@@ -497,14 +515,21 @@ class GitLOC:
         Get the total lines of code from the default branch
         """
         def extract_lines_of_code(value):
-            if len(value) > 0 and 'SUM:' in value:
-                return int((value.split('\n')[-3]).split(' ')[-1])
-            return 0
+            loc_value = 0
+            try:
+                if len(value) > 0 and ('SUM:' in value
+                                       or 'Language:' in value):
+                    loc_value = int((value.split('\n')[-3]).split(' ')[-1])
+            except (Exception, RuntimeError) as re:
+                logger.error('Extract lines of code %s ', str(re), exc_info=True)
+            finally:
+                return loc_value
 
         return extract_lines_of_code(self.sanitize_os_output(result))
 
     def _clone(self):
-        """Clone a Git repository.
+        """
+        Clone a Git repository.
 
         Make a bare copy of the repository stored in `uri` into `dirpath`.
         The repository would be either local or remote.
@@ -517,18 +542,19 @@ class GitLOC:
         :raises RepositoryError: when an error occurs cloning the given
             repository
         """
-        cmd = ['git', 'clone', self.git_url, self.repo_path]
+        cmd = ['git', 'clone', self.git_url, '.']
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
         }
 
         try:
-            self._exec(cmd, env=env)
-            logger.debug("Git %s repository cloned into %s",
+            self._exec(cmd, cwd=self.repo_path, env=env)
+            logger.debug('Git %s repository cloned into %s',
                          self.git_url, self.repo_path)
-        except (RuntimeError, Exception) as cloe:
-            logger.error("Git clone error %s ", str(cloe))
+        except (RuntimeError, Exception, RepositoryError) as cloe:
+            logger.error('Git clone error %s ', str(cloe), exc_info=True)
+            raise cloe
 
     def _clean(self, force=False):
         cmd = ['rm', '-rf', self.repo_path]
@@ -546,10 +572,10 @@ class GitLOC:
             else:
                 logger.debug("Git %s repository clean skip", self.repo_path)
         except (RuntimeError, Exception) as cle:
-            logger.error("Git clone error %s", str(cle))
+            logger.error('Git clone error %s', str(cle), exc_info=True)
+            raise cle
 
     def _pull(self):
-        os.chdir(os.path.abspath(self.repo_path))
         env = {
             'LANG': 'C',
             'HOME': os.getenv('HOME', '')
@@ -560,48 +586,49 @@ class GitLOC:
         try:
             cmd_auto = ['git', 'remote', 'set-head', 'origin', '--auto']
             cmd_short = ['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']
-            self._exec(cmd_auto, env=env)
-            result = self._exec(cmd_short, env=env)
+            self._exec(cmd_auto, cwd=self.repo_path, env=env)
+            result = self._exec(cmd_short, cwd=self.repo_path, env=env)
             result = self.sanitize_os_output(result)
             branch = result.replace('origin/', '').strip()
-            logger.debug("Git %s repository active branch is: %s",
+            logger.debug('Git %s repository active branch is: %s',
                          self.repo_path, branch)
-        except (RuntimeError, Exception) as be:
-            logger.error("Git find active branch error %s", str(be))
+        except (RuntimeError, Exception, RepositoryError) as be:
+            logger.error('Git find active branch error %s', str(be), exc_info=True)
+            raise be
 
         try:
             if branch:
                 cmd = ['git', 'checkout', branch]
-                self._exec(cmd, env=env)
-                logger.debug("Git %s repository "
-                             "checkout with following branch %s",
+                self._exec(cmd, cwd=self.repo_path, env=env)
+                logger.debug('Git %s repository '
+                             'checkout with following branch %s',
                              self.repo_path, branch)
-        except (RuntimeError, Exception) as gce:
-            logger.error("Git checkout error %s", str(gce))
+        except (RuntimeError, Exception, RepositoryError) as gce:
+            logger.error('Git checkout error %s', str(gce), exc_info=True)
+            raise gce
 
         try:
             if branch:
                 cmd = ['git', 'pull', 'origin', branch]
-                result = self._exec(cmd, env=env)
+                result = self._exec(cmd, cwd=self.repo_path, env=env)
                 result = self.sanitize_os_output(result)
                 if len(result) >= 18 and 'Already up to date.' in result:
                     status = True
-                logger.debug("Git %s repository pull updated code",
+                logger.debug('Git %s repository pull updated code',
                              self.repo_path)
             else:
-                logger.debug("Git repository active branch missing")
-                logger.debug("Git %s repository pull request skip ",
+                logger.debug('Git repository active branch missing')
+                logger.debug('Git %s repository pull request skip ',
                              self.repo_path)
-        except (RuntimeError, Exception) as pe:
-            logger.error("Git pull error %s", str(pe))
+        except (RuntimeError, Exception, RepositoryError) as pe:
+            logger.error('Git pull error %s', str(pe), exc_info=True)
+            raise pe
 
         return status
 
     def _fetch(self):
-        os.chdir(os.path.abspath(self.repo_path))
-
         cmd_fetch = ['git', 'fetch']
-        cmd_fetch_p = ['git', 'fetch']
+        cmd_fetch_p = ['git', 'fetch', '--all', '-p']
 
         env = {
             'LANG': 'C',
@@ -609,16 +636,18 @@ class GitLOC:
         }
 
         try:
-            self._exec(cmd_fetch, env=env)
-            logger.debug("Git %s fetch updated code", self.repo_path)
-        except (RuntimeError, Exception) as fe:
-            logger.error("Git fetch purge error %s", str(fe))
+            self._exec(cmd_fetch, cwd=self.repo_path, env=env)
+            logger.debug('Git %s fetch updated code', self.repo_path)
+        except (RuntimeError, Exception, RepositoryError) as fe:
+            logger.error('Git fetch purge error %s', str(fe), exc_info=True)
+            raise fe
 
         try:
-            self._exec(cmd_fetch_p, env=env)
-            logger.debug("Git %s fetch purge code", self.repo_path)
-        except (RuntimeError, Exception) as fpe:
-            logger.error("Git fetch purge error %s", str(fpe))
+            self._exec(cmd_fetch_p, cwd=self.repo_path, env=env)
+            logger.debug('Git %s fetch purge code', self.repo_path)
+        except (RuntimeError, Exception, RepositoryError) as fpe:
+            logger.error('Git fetch purge error %s', str(fpe), exc_info=True)
+            raise fpe
 
     def _build_empty_stats_data(self):
         stats_data = {
@@ -637,7 +666,7 @@ class GitLOC:
                 f.write(json.dumps(data, indent=4))
             f.close()
         except Exception as je:
-            logger.error("cache file write error %s", str(je))
+            logger.error('cache file write error %s', str(je), exc_info=True)
         finally:
             pass
 
@@ -650,7 +679,7 @@ class GitLOC:
             f.close()
             return json.loads(data)
         except Exception as je:
-            logger.error("cache file write error %s", str(je))
+            logger.error('cache file write error %s', str(je), exc_info=True)
             error = True
         finally:
             if error:
@@ -696,27 +725,53 @@ class GitLOC:
             self.uptodate = self._pull()
 
     def get_stats(self):
-        loc = self._get_cache_item(self.repo_name, 'loc')
-        pls = self._get_cache_item(self.repo_name, 'pls')
+        loc = 0
+        pls = list()
 
-        if not self.uptodate or (loc == 0 and len(pls) == 0):
+        # Get the cache loc and pls for fallback
+        cache_loc = self._get_cache_item(self.repo_name, 'loc')
+        cache_pls = self._get_cache_item(self.repo_name, 'pls')
+
+        try:
+            # Calculate the loc from source
             result = self._stats(self.repo_path)
+
+            # extract new the loc and pls
             loc = self._loc(result)
             pls = self._pls(result)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='loc',
-                                    value=loc)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='pls',
-                                    value=pls)
-            utc_date = datetime.datetime.utcnow()
-            if utc_date.tzinfo is None:
-                utc_date = utc_date.replace(tzinfo=datetime.timezone.utc)
-            self._update_cache_item(project_name=self.repo_name,
-                                    key='timestamp',
-                                    value=utc_date.isoformat())
-            self._write_json_file(data=self._cache,
-                                  path=self.__get_cache_path(),
-                                  filename=self.cache_file_name)
 
-        return loc, pls
+            logger.debug('Cache loc value %s', cache_loc)
+            logger.debug('New loc value %s', loc)
+
+            if loc == 0:
+                logger.debug('LOC value set from old cache')
+                # Set cache_loc value if new extracted one will be the zero
+                loc = cache_loc
+                pls = cache_pls
+            else:
+                logger.debug('Updating LOC value in cache')
+                # update the cache with new value and timestamp
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='loc',
+                                        value=loc)
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='pls',
+                                        value=pls)
+                utc_date = datetime.datetime.utcnow()
+                if utc_date.tzinfo is None:
+                    utc_date = utc_date.replace(tzinfo=datetime.timezone.utc)
+                self._update_cache_item(project_name=self.repo_name,
+                                        key='timestamp',
+                                        value=utc_date.isoformat())
+                self._write_json_file(data=self._cache,
+                                      path=self.__get_cache_path(),
+                                      filename=self.cache_file_name)
+        except Exception as se:
+            logger.error('LOC error %s', str(se), exc_info=True)
+            logger.debug('LOC value set from old cache')
+            # Set cache_loc value if cloc fails
+            loc = cache_loc
+            pls = cache_pls
+        finally:
+            logger.debug('Final LOC value %s', loc)
+            return loc, pls
